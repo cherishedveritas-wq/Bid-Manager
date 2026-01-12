@@ -1,29 +1,53 @@
 
-import React, { useState } from 'react';
-import { ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ShieldCheck, Loader2 } from 'lucide-react';
 import { AppUser } from '../types';
+import { fetchUsersFromSheet, hasSheetUrl } from '../api';
 
 interface LoginProps {
   onLogin: (user: AppUser) => void;
 }
 
+const INITIAL_USERS: AppUser[] = [
+  { id: 'admin', name: '최철민', birthDate: '760112', isAdmin: true },
+  { id: 'user1', name: '박상일', birthDate: '701017', isAdmin: false },
+];
+
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [name, setName] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
+    setError('');
     
-    const storedUsers = JSON.parse(localStorage.getItem('appUsers') || '[]');
-    const foundUser = storedUsers.find(
-      (u: AppUser) => u.name === name && u.birthDate === birthDate
-    );
+    try {
+      let userList = INITIAL_USERS;
+      
+      // 구글 시트 연동 정보가 있으면 원격에서 가져옴
+      if (hasSheetUrl()) {
+        const cloudUsers = await fetchUsersFromSheet();
+        if (cloudUsers.length > 0) {
+          userList = cloudUsers;
+        }
+      }
 
-    if (foundUser) {
-      onLogin(foundUser);
-    } else {
-      setError('사용자 정보가 일치하지 않습니다.');
+      const foundUser = userList.find(
+        (u: AppUser) => u.name === name && u.birthDate === birthDate
+      );
+
+      if (foundUser) {
+        onLogin(foundUser);
+      } else {
+        setError('사용자 정보가 일치하지 않습니다. (동기화 확인 필요)');
+      }
+    } catch (err) {
+      setError('서버 연결 오류가 발생했습니다.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -44,6 +68,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <input
               type="text"
               required
+              disabled={isLoading}
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="이름을 입력하세요"
@@ -56,6 +81,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <input
               type="text"
               required
+              disabled={isLoading}
               maxLength={6}
               value={birthDate}
               onChange={(e) => setBirthDate(e.target.value.replace(/[^0-9]/g, ''))}
@@ -65,16 +91,17 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </div>
 
           {error && (
-            <div className="bg-red-50 text-red-500 text-sm py-3 px-4 rounded-xl text-center font-medium animate-pulse">
+            <div className="bg-red-50 text-red-500 text-sm py-3 px-4 rounded-xl text-center font-medium">
               {error}
             </div>
           )}
 
           <button
             type="submit"
-            className="w-full bg-[#2563eb] hover:bg-blue-700 text-white font-bold py-4 rounded-2xl transition-all shadow-lg hover:shadow-blue-200 active:scale-[0.98] text-lg"
+            disabled={isLoading}
+            className="w-full bg-[#2563eb] hover:bg-blue-700 text-white font-bold py-4 rounded-2xl transition-all shadow-lg hover:shadow-blue-200 active:scale-[0.98] text-lg flex justify-center items-center"
           >
-            로그인
+            {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : '로그인'}
           </button>
         </form>
         

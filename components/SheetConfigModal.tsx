@@ -9,71 +9,87 @@ interface SheetConfigModalProps {
   onSaved: () => void;
 }
 
-const APPS_SCRIPT_CODE = `// 구글 스프레드시트 Apps Script에 복사해서 사용하세요.
+const APPS_SCRIPT_CODE = `// 아래 코드를 복사하여 Apps Script에 덮어쓰기 하세요.
+const BID_SHEET_NAME = "Bids";
+const USER_SHEET_NAME = "Users";
+
 function doGet(e) {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheets()[0];
-    const range = sheet.getDataRange();
-    
-    if (sheet.getLastRow() < 1) {
-      return ContentService.createTextOutput(JSON.stringify({ items: [] }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-    
-    const rows = range.getValues();
-    const headers = rows[0];
-    const items = rows.slice(1).map(row => {
-      let obj = {};
-      headers.forEach((header, i) => { obj[header] = row[i]; });
-      return obj;
-    });
-    return ContentService.createTextOutput(JSON.stringify({ items: items }))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ error: err.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
+  const action = e.parameter.action;
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // 데이터 읽기 (입찰)
+  if (action === 'read' || !action) {
+    const sheet = getOrCreateSheet(ss, BID_SHEET_NAME);
+    return createJsonResponse({ items: getRowsData(sheet) });
+  }
+  
+  // 데이터 읽기 (사용자)
+  if (action === 'readUsers') {
+    const sheet = getOrCreateSheet(ss, USER_SHEET_NAME, ["id", "name", "birthDate", "isAdmin"]);
+    return createJsonResponse({ users: getRowsData(sheet) });
   }
 }
 
 function doPost(e) {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheets()[0];
-    const payload = JSON.parse(e.postData.contents);
-    const { action, data, id } = payload;
-    
-    if (sheet.getLastRow() === 0 && action === 'create') {
-      sheet.appendRow(Object.keys(data));
-    }
-    
-    const rows = sheet.getDataRange().getValues();
-    const headers = rows[0];
-    
-    if (action === 'create') {
-      const newRow = headers.map(h => data[h]);
-      sheet.appendRow(newRow);
-    } else if (action === 'update' || action === 'delete') {
-      const idIndex = headers.indexOf('id');
-      for (let i = 1; i < rows.length; i++) {
-        if (rows[i][idIndex] === id) {
-          if (action === 'update') {
-            const updatedRow = headers.map(h => data[h]);
-            sheet.getRange(i + 1, 1, 1, headers.length).setValues([updatedRow]);
-          } else {
-            sheet.deleteRow(i + 1);
-          }
-          break;
-        }
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const payload = JSON.parse(e.postData.contents);
+  const { action, data, user, id } = payload;
+
+  if (action === 'create' || action === 'update' || action === 'delete') {
+    const sheet = getOrCreateSheet(ss, BID_SHEET_NAME);
+    handleAction(sheet, action, data, id);
+  } else if (action === 'createUser' || action === 'deleteUser') {
+    const sheet = getOrCreateSheet(ss, USER_SHEET_NAME, ["id", "name", "birthDate", "isAdmin"]);
+    if (action === 'createUser') handleAction(sheet, 'create', user);
+    if (action === 'deleteUser') handleAction(sheet, 'delete', null, id);
+  }
+
+  return createJsonResponse({ result: 'success' });
+}
+
+function getOrCreateSheet(ss, name, headers = null) {
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    if (headers) sheet.appendRow(headers);
+  }
+  return sheet;
+}
+
+function getRowsData(sheet) {
+  if (sheet.getLastRow() < 2) return [];
+  const rows = sheet.getDataRange().getValues();
+  const headers = rows[0];
+  return rows.slice(1).map(row => {
+    let obj = {};
+    headers.forEach((h, i) => { obj[h] = row[i]; });
+    return obj;
+  });
+}
+
+function handleAction(sheet, action, data, id) {
+  const rows = sheet.getDataRange().getValues();
+  const headers = rows[0];
+  const idIdx = headers.indexOf('id');
+
+  if (action === 'create') {
+    if (sheet.getLastRow() === 0) sheet.appendRow(Object.keys(data));
+    sheet.appendRow(headers.map(h => data[h]));
+  } else {
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][idIdx] === id) {
+        if (action === 'update') sheet.getRange(i + 1, 1, 1, headers.length).setValues([headers.map(h => data[h])]);
+        else if (action === 'delete') sheet.deleteRow(i + 1);
+        break;
       }
     }
-    return ContentService.createTextOutput(JSON.stringify({ result: 'success' }))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ error: err.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
   }
-}`;
+}
+
+function createJsonResponse(data) {
+  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
+}
+`;
 
 const SheetConfigModal: React.FC<SheetConfigModalProps> = ({ isOpen, onClose, onSaved }) => {
   const [url, setUrlInput] = useState('');
@@ -128,11 +144,11 @@ const SheetConfigModal: React.FC<SheetConfigModalProps> = ({ isOpen, onClose, on
           <div className="bg-blue-50 border border-blue-100 p-6 rounded-3xl text-sm text-slate-600">
             <p className="mb-4 font-bold text-blue-800 text-base">🚀 해결 방법: 아래 단계를 꼭 확인하세요!</p>
             <ol className="list-decimal pl-5 space-y-3 leading-relaxed font-medium">
-              <li>아래 코드를 복사하여 구글 시트 <span className="font-bold">Apps Script</span>에 붙여넣고 저장하세요.</li>
+              <li>아래 코드를 복사하여 구글 시트 <span className="font-bold">Apps Script</span>에 <span className="text-red-600">덮어쓰기</span> 하세요. (사용자 동기화 포함됨)</li>
               <li>상단 메뉴 <span className="text-red-600 font-bold">배포 > 새 배포</span>를 클릭합니다.</li>
               <li>유형 선택: <span className="font-bold">웹 앱(Web App)</span></li>
               <li>액세스 권한: <span className="text-red-600 font-bold text-base underline">모든 사용자(Anyone)</span> 로 변경 (중요!)</li>
-              <li>배포 후 생성된 <span className="font-bold">웹 앱 URL</span>을 아래에 입력하세요.</li>
+              <li>생성된 <span className="font-bold">웹 앱 URL</span>을 아래에 입력하세요.</li>
             </ol>
           </div>
 
@@ -157,7 +173,7 @@ const SheetConfigModal: React.FC<SheetConfigModalProps> = ({ isOpen, onClose, on
           </div>
 
           <div className="space-y-3">
-            <label className="block text-sm font-bold text-slate-500 ml-1">웹 앱 URL (반드시 /exec로 끝나는 주소)</label>
+            <label className="block text-sm font-bold text-slate-500 ml-1">웹 앱 URL</label>
             <div className="flex gap-2">
               <input
                 type="text"
