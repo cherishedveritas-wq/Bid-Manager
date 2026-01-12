@@ -6,7 +6,7 @@ import { AppUser } from './types';
 
 const INITIAL_USERS: AppUser[] = [
   { id: 'admin', name: '최철민', birthDate: '760112', isAdmin: true },
-  { id: 'user1', name: '홍길동', birthDate: '850101', isAdmin: false },
+  { id: 'user1', name: '박상일', birthDate: '701017', isAdmin: false },
   { id: 'user2', name: '김영희', birthDate: '900505', isAdmin: false },
   { id: 'user3', name: '이철수', birthDate: '821225', isAdmin: false },
   { id: 'user4', name: '박지민', birthDate: '950314', isAdmin: false },
