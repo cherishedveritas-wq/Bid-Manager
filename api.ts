@@ -2,10 +2,13 @@
 import { Bid, AppUser } from './types';
 
 const STORAGE_KEY = 'googleSheetUrl';
+// 제공해주신 고정 URL을 기본값으로 설정
+export const DEFAULT_SHEET_URL = 'https://script.google.com/macros/s/AKfycbxLZloLUk0buA3OHI-BiGTGc39qHeoCYn-KW8SjlsHDicaVcpQAlb7p41CSNUx0uB8D/exec';
 
-export const getSheetUrl = () => localStorage.getItem(STORAGE_KEY);
+export const getSheetUrl = () => localStorage.getItem(STORAGE_KEY) || DEFAULT_SHEET_URL;
 export const setSheetUrl = (url: string) => localStorage.setItem(STORAGE_KEY, url);
 
+// 기본 URL이 있으므로 항상 true를 반환하거나, 저장된 값이 없을 때도 기본값을 사용함을 보장
 export const hasSheetUrl = () => !!getSheetUrl();
 
 /**
@@ -73,7 +76,7 @@ export async function syncBidToSheet(action: 'create' | 'update' | 'delete', dat
 }
 
 /**
- * 사용자 데이터 처리 (새로 추가)
+ * 사용자 데이터 처리
  */
 export async function fetchUsersFromSheet(): Promise<AppUser[]> {
   const url = getSheetUrl();

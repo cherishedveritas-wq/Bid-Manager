@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, Save, Link, CheckCircle, AlertCircle, Copy, Code, Loader2, PlayCircle } from 'lucide-react';
-import { getSheetUrl, setSheetUrl, testSheetConnection } from '../api';
+import { getSheetUrl, setSheetUrl, testSheetConnection, DEFAULT_SHEET_URL } from '../api';
 
 interface SheetConfigModalProps {
   isOpen: boolean;
@@ -99,7 +99,8 @@ const SheetConfigModal: React.FC<SheetConfigModalProps> = ({ isOpen, onClose, on
 
   useEffect(() => {
     if (isOpen) {
-      setUrlInput(getSheetUrl() || '');
+      // 로컬 스토리지가 비어있어도 DEFAULT_SHEET_URL이 반환됨
+      setUrlInput(getSheetUrl());
       setTestResult(null);
     }
   }, [isOpen]);
@@ -125,6 +126,11 @@ const SheetConfigModal: React.FC<SheetConfigModalProps> = ({ isOpen, onClose, on
     onClose();
   };
 
+  const useDefaultUrl = () => {
+    setUrlInput(DEFAULT_SHEET_URL);
+    setTestResult(null);
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -141,21 +147,15 @@ const SheetConfigModal: React.FC<SheetConfigModalProps> = ({ isOpen, onClose, on
         </div>
 
         <div className="p-8 space-y-8 overflow-y-auto max-h-[70vh] custom-scrollbar">
-          <div className="bg-blue-50 border border-blue-100 p-6 rounded-3xl text-sm text-slate-600">
-            <p className="mb-4 font-bold text-blue-800 text-base">🚀 해결 방법: 아래 단계를 꼭 확인하세요!</p>
-            <ol className="list-decimal pl-5 space-y-3 leading-relaxed font-medium">
-              <li>아래 코드를 복사하여 구글 시트 <span className="font-bold">Apps Script</span>에 <span className="text-red-600">덮어쓰기</span> 하세요. (사용자 동기화 포함됨)</li>
-              <li>상단 메뉴 <span className="text-red-600 font-bold">배포 > 새 배포</span>를 클릭합니다.</li>
-              <li>유형 선택: <span className="font-bold">웹 앱(Web App)</span></li>
-              <li>액세스 권한: <span className="text-red-600 font-bold text-base underline">모든 사용자(Anyone)</span> 로 변경 (중요!)</li>
-              <li>생성된 <span className="font-bold">웹 앱 URL</span>을 아래에 입력하세요.</li>
-            </ol>
+          <div className="bg-emerald-50 border border-emerald-100 p-6 rounded-3xl text-sm text-slate-600">
+            <p className="mb-2 font-bold text-emerald-800 text-base">✅ 공용 DB URL이 설정되어 있습니다.</p>
+            <p className="font-medium text-emerald-700">제공해주신 고정 주소가 기본값으로 적용되었습니다. 별도 수정을 원치 않으시면 그대로 사용하시면 됩니다.</p>
           </div>
 
           <div className="space-y-3">
             <div className="flex justify-between items-end mb-1">
               <label className="text-sm font-bold text-slate-500 flex items-center">
-                <Code className="w-4 h-4 mr-1.5" /> Apps Script 코드
+                <Code className="w-4 h-4 mr-1.5" /> Apps Script 코드 (새 시트 생성 시 필요)
               </label>
               <button 
                 onClick={copyToClipboard}
@@ -167,13 +167,21 @@ const SheetConfigModal: React.FC<SheetConfigModalProps> = ({ isOpen, onClose, on
                 {copied ? '복사됨!' : '코드 복사하기'}
               </button>
             </div>
-            <pre className="w-full h-32 bg-slate-900 text-slate-300 p-4 rounded-2xl text-[10px] overflow-auto font-mono custom-scrollbar">
+            <pre className="w-full h-24 bg-slate-900 text-slate-300 p-4 rounded-2xl text-[10px] overflow-auto font-mono custom-scrollbar">
               {APPS_SCRIPT_CODE}
             </pre>
           </div>
 
           <div className="space-y-3">
-            <label className="block text-sm font-bold text-slate-500 ml-1">웹 앱 URL</label>
+            <div className="flex justify-between items-center">
+              <label className="block text-sm font-bold text-slate-500 ml-1">웹 앱 URL</label>
+              <button 
+                onClick={useDefaultUrl}
+                className="text-[11px] font-bold text-blue-600 hover:underline"
+              >
+                기본 URL로 초기화
+              </button>
+            </div>
             <div className="flex gap-2">
               <input
                 type="text"
