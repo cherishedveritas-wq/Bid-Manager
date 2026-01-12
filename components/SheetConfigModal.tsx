@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Save, Link, CheckCircle, AlertCircle, Copy, Code } from 'lucide-react';
-import { getSheetUrl, setSheetUrl } from '../api';
+import { X, Save, Link, CheckCircle, AlertCircle, Copy, Code, Loader2, PlayCircle } from 'lucide-react';
+import { getSheetUrl, setSheetUrl, testSheetConnection } from '../api';
 
 interface SheetConfigModalProps {
   isOpen: boolean;
@@ -11,59 +11,80 @@ interface SheetConfigModalProps {
 
 const APPS_SCRIPT_CODE = `// 구글 스프레드시트 Apps Script에 복사해서 사용하세요.
 function doGet(e) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
-  const rows = sheet.getDataRange().getValues();
-  const headers = rows[0];
-  const items = rows.slice(1).map(row => {
-    let obj = {};
-    headers.forEach((header, i) => { obj[header] = row[i]; });
-    return obj;
-  });
-  return ContentService.createTextOutput(JSON.stringify({ items: items }))
-    .setMimeType(ContentService.MimeType.JSON);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheets()[0];
+    const range = sheet.getDataRange();
+    
+    if (sheet.getLastRow() < 1) {
+      return ContentService.createTextOutput(JSON.stringify({ items: [] }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    const rows = range.getValues();
+    const headers = rows[0];
+    const items = rows.slice(1).map(row => {
+      let obj = {};
+      headers.forEach((header, i) => { obj[header] = row[i]; });
+      return obj;
+    });
+    return ContentService.createTextOutput(JSON.stringify({ items: items }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ error: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
 }
 
 function doPost(e) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
-  const payload = JSON.parse(e.postData.contents);
-  const { action, data, id } = payload;
-  
-  const rows = sheet.getDataRange().getValues();
-  const headers = rows[0];
-  
-  if (action === 'create') {
-    if (sheet.getLastRow() === 0) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheets()[0];
+    const payload = JSON.parse(e.postData.contents);
+    const { action, data, id } = payload;
+    
+    if (sheet.getLastRow() === 0 && action === 'create') {
       sheet.appendRow(Object.keys(data));
     }
-    const newRow = headers.map(h => data[h]);
-    sheet.appendRow(newRow);
-  } else if (action === 'update' || action === 'delete') {
-    const idIndex = headers.indexOf('id');
-    for (let i = 1; i < rows.length; i++) {
-      if (rows[i][idIndex] === id) {
-        if (action === 'update') {
-          const updatedRow = headers.map(h => data[h]);
-          sheet.getRange(i + 1, 1, 1, headers.length).setValues([updatedRow]);
-        } else {
-          sheet.deleteRow(i + 1);
+    
+    const rows = sheet.getDataRange().getValues();
+    const headers = rows[0];
+    
+    if (action === 'create') {
+      const newRow = headers.map(h => data[h]);
+      sheet.appendRow(newRow);
+    } else if (action === 'update' || action === 'delete') {
+      const idIndex = headers.indexOf('id');
+      for (let i = 1; i < rows.length; i++) {
+        if (rows[i][idIndex] === id) {
+          if (action === 'update') {
+            const updatedRow = headers.map(h => data[h]);
+            sheet.getRange(i + 1, 1, 1, headers.length).setValues([updatedRow]);
+          } else {
+            sheet.deleteRow(i + 1);
+          }
+          break;
         }
-        break;
       }
     }
+    return ContentService.createTextOutput(JSON.stringify({ result: 'success' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ error: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
   }
-  return ContentService.createTextOutput(JSON.stringify({ result: 'success' }))
-    .setMimeType(ContentService.MimeType.JSON);
 }`;
 
 const SheetConfigModal: React.FC<SheetConfigModalProps> = ({ isOpen, onClose, onSaved }) => {
   const [url, setUrlInput] = useState('');
-  const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setUrlInput(getSheetUrl() || '');
-      setStatus('idle');
+      setTestResult(null);
     }
   }, [isOpen]);
 
@@ -73,28 +94,22 @@ const SheetConfigModal: React.FC<SheetConfigModalProps> = ({ isOpen, onClose, on
     setTimeout(() => setCopied(false), 2000);
   };
 
-  if (!isOpen) return null;
+  const handleTest = async () => {
+    if (!url.trim()) return;
+    setIsTesting(true);
+    setTestResult(null);
+    const result = await testSheetConnection(url.trim());
+    setTestResult(result);
+    setIsTesting(false);
+  };
 
   const handleSave = () => {
-    if (!url.trim()) {
-      setSheetUrl('');
-      onSaved();
-      onClose();
-      return;
-    }
-
-    if (!url.includes('script.google.com')) {
-      setStatus('error');
-      return;
-    }
-
     setSheetUrl(url.trim());
-    setStatus('success');
-    setTimeout(() => {
-      onSaved();
-      onClose();
-    }, 1000);
+    onSaved();
+    onClose();
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
@@ -111,14 +126,13 @@ const SheetConfigModal: React.FC<SheetConfigModalProps> = ({ isOpen, onClose, on
 
         <div className="p-8 space-y-8 overflow-y-auto max-h-[70vh] custom-scrollbar">
           <div className="bg-blue-50 border border-blue-100 p-6 rounded-3xl text-sm text-slate-600">
-            <p className="mb-4 font-bold text-blue-800 text-base">🚀 데이터베이스 연동 가이드</p>
+            <p className="mb-4 font-bold text-blue-800 text-base">🚀 해결 방법: 아래 단계를 꼭 확인하세요!</p>
             <ol className="list-decimal pl-5 space-y-3 leading-relaxed font-medium">
-              <li>아래의 <span className="text-blue-700 font-bold">스크립트 코드</span>를 복사합니다.</li>
-              <li>사용할 구글 시트에서 <span className="font-bold">확장 프로그램 &gt; Apps Script</span>를 실행합니다.</li>
-              <li>기존 코드를 지우고 복사한 코드를 붙여넣은 뒤 <span className="font-bold">저장</span>합니다.</li>
-              <li>상단 <span className="font-bold text-red-600">배포 &gt; 새 배포</span> 클릭 (유형: 웹 앱).</li>
-              <li>설정: 설명 입력, 다음 사용자 인증(나), 액세스 권한(<span className="text-red-600 font-bold">모든 사용자/Anyone</span>).</li>
-              <li>생성된 <span className="font-bold">웹 앱 URL</span>을 아래 입력창에 붙여넣으세요.</li>
+              <li>아래 코드를 복사하여 구글 시트 <span className="font-bold">Apps Script</span>에 붙여넣고 저장하세요.</li>
+              <li>상단 메뉴 <span className="text-red-600 font-bold">배포 > 새 배포</span>를 클릭합니다.</li>
+              <li>유형 선택: <span className="font-bold">웹 앱(Web App)</span></li>
+              <li>액세스 권한: <span className="text-red-600 font-bold text-base underline">모든 사용자(Anyone)</span> 로 변경 (중요!)</li>
+              <li>배포 후 생성된 <span className="font-bold">웹 앱 URL</span>을 아래에 입력하세요.</li>
             </ol>
           </div>
 
@@ -137,28 +151,37 @@ const SheetConfigModal: React.FC<SheetConfigModalProps> = ({ isOpen, onClose, on
                 {copied ? '복사됨!' : '코드 복사하기'}
               </button>
             </div>
-            <pre className="w-full h-40 bg-slate-900 text-slate-300 p-4 rounded-2xl text-[11px] overflow-auto font-mono leading-normal custom-scrollbar select-all">
+            <pre className="w-full h-32 bg-slate-900 text-slate-300 p-4 rounded-2xl text-[10px] overflow-auto font-mono custom-scrollbar">
               {APPS_SCRIPT_CODE}
             </pre>
           </div>
 
           <div className="space-y-3">
-            <label className="block text-sm font-bold text-slate-500 ml-1">생성된 웹 앱 URL (Web App URL)</label>
-            <input
-              type="text"
-              value={url}
-              onChange={(e) => setUrlInput(e.target.value)}
-              placeholder="https://script.google.com/macros/s/..."
-              className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-sm font-medium"
-            />
-            {status === 'error' && (
-              <div className="bg-red-50 text-red-500 p-3 rounded-xl text-xs font-bold flex items-center animate-bounce">
-                <AlertCircle className="w-4 h-4 mr-2" /> 올바른 Google Apps Script URL이 아닙니다.
-              </div>
-            )}
-            {status === 'success' && (
-              <div className="bg-emerald-50 text-emerald-600 p-3 rounded-xl text-xs font-bold flex items-center">
-                <CheckCircle className="w-4 h-4 mr-2" /> 연동 정보가 정상적으로 저장되었습니다!
+            <label className="block text-sm font-bold text-slate-500 ml-1">웹 앱 URL (반드시 /exec로 끝나는 주소)</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={url}
+                onChange={(e) => setUrlInput(e.target.value)}
+                placeholder="https://script.google.com/macros/s/.../exec"
+                className="flex-1 px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm font-medium"
+              />
+              <button
+                onClick={handleTest}
+                disabled={isTesting || !url.trim()}
+                className="px-5 py-4 bg-slate-800 text-white rounded-2xl font-bold hover:bg-black transition-all flex items-center disabled:opacity-50"
+              >
+                {isTesting ? <Loader2 className="w-5 h-5 animate-spin" /> : <PlayCircle className="w-5 h-5 mr-2" />}
+                테스트
+              </button>
+            </div>
+
+            {testResult && (
+              <div className={`p-4 rounded-2xl text-sm font-bold flex items-start gap-3 animate-in slide-in-from-top-2 ${
+                testResult.success ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'
+              }`}>
+                {testResult.success ? <CheckCircle className="w-5 h-5 shrink-0" /> : <AlertCircle className="w-5 h-5 shrink-0" />}
+                <p>{testResult.message}</p>
               </div>
             )}
           </div>
@@ -167,13 +190,14 @@ const SheetConfigModal: React.FC<SheetConfigModalProps> = ({ isOpen, onClose, on
         <div className="p-8 border-t border-slate-50 flex justify-end space-x-4 bg-white">
           <button
             onClick={onClose}
-            className="px-6 py-4 border border-slate-200 rounded-2xl text-slate-500 font-bold hover:bg-slate-50 transition-all active:scale-95"
+            className="px-6 py-4 border border-slate-200 rounded-2xl text-slate-500 font-bold hover:bg-slate-50 transition-all"
           >
             취소
           </button>
           <button
             onClick={handleSave}
-            className="px-10 py-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 flex items-center font-bold shadow-lg shadow-blue-100 transition-all active:scale-95"
+            disabled={!url.trim()}
+            className="px-10 py-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 flex items-center font-bold shadow-lg shadow-blue-100 transition-all disabled:opacity-50"
           >
             <Save className="w-5 h-5 mr-2" />
             연동 저장하기

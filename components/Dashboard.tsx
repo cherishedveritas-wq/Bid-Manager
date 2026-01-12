@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { PlusCircle, LogOut, Database, RefreshCw, Loader2, Calendar, Users, AlertTriangle } from 'lucide-react';
+import { PlusCircle, LogOut, Database, RefreshCw, Loader2, Calendar, Users, AlertTriangle, RotateCw } from 'lucide-react';
 import { Bid, BidCategory, BidResult, AppUser } from '../types';
 import StatsOverview from './StatsOverview';
 import BidTable from './BidTable';
@@ -76,15 +76,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, currentUser }) => {
       setIsSheetConnected(true);
       try {
         const data = await fetchBids();
-        if (data && data.length > 0) {
-          setAllBids(data);
-        } else {
-          setAllBids([]);
-        }
+        setAllBids(data.length > 0 ? data : []);
       } catch (error) {
         console.error("Error loading data from Google Sheets", error);
         setConnectionError(true);
-        // 연동 실패 시 로컬 더미 데이터라도 보여줌
         if (allBids.length === 0) setAllBids(INITIAL_DATA);
       } finally {
         setIsLoading(false);
@@ -106,7 +101,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, currentUser }) => {
 
     if (isSheetConnected) {
       const action = isEdit ? 'update' : 'create';
-      await syncBidToSheet(action, bid);
+      const success = await syncBidToSheet(action, bid);
+      if (!success) {
+        alert('데이터 동기화에 실패했습니다. (DB 연결 상태를 확인하세요)');
+        loadData();
+      }
     }
   };
 
@@ -116,7 +115,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, currentUser }) => {
       setAllBids(prev => prev.filter(item => item.id !== id));
       if (isSheetConnected) {
         const success = await syncBidToSheet('delete', undefined, id);
-        if (!success) setAllBids(prevBids);
+        if (!success) {
+          alert('삭제 동기화에 실패했습니다.');
+          setAllBids(prevBids);
+        }
       }
     }
   };
@@ -143,14 +145,26 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, currentUser }) => {
           </div>
 
           <div className="flex items-center space-x-4">
-            {connectionError && (
-              <div className="flex items-center text-red-500 text-xs font-bold bg-red-50 px-3 py-1.5 rounded-full border border-red-100 animate-pulse">
-                <AlertTriangle className="w-3.5 h-3.5 mr-1.5" /> DB 연동 오류
-              </div>
+            {connectionError ? (
+              <button 
+                onClick={loadData}
+                className="flex items-center text-red-500 text-xs font-bold bg-red-50 px-3 py-1.5 rounded-full border border-red-100 hover:bg-red-100 transition-colors group"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 mr-1.5" /> 
+                DB 연동 오류 
+                <RotateCw className="w-3 h-3 ml-1.5 group-hover:rotate-180 transition-transform duration-500" />
+              </button>
+            ) : (
+              isSheetConnected && (
+                <div className="flex items-center text-emerald-600 text-xs font-bold bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-2"></div>
+                  실시간 DB 연결됨
+                </div>
+              )
             )}
             
             <div className="flex items-center bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse"></div>
+              <div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>
               <span className="text-sm font-bold text-slate-600">{currentUser.name} {currentUser.isAdmin ? '(관리자)' : '(사용자)'}</span>
             </div>
 
