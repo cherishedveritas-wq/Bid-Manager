@@ -59,7 +59,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               maxLength={6}
               value={birthDate}
               onChange={(e) => setBirthDate(e.target.value.replace(/[^0-9]/g, ''))}
-              placeholder="예: 850101"
+              placeholder="예: 701017"
               className="w-full px-5 py-4 bg-[#3f3f46] text-white border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all outline-none placeholder-slate-500"
             />
           </div>
@@ -78,8 +78,9 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </button>
         </form>
         
-        <div className="mt-8 pt-6 border-t border-slate-50 text-center">
-          <p className="text-xs text-slate-300">초기 관리자: 홍길동 / 850101</p>
+        <div className="mt-8 pt-6 border-t border-slate-50 text-center space-y-1">
+          <p className="text-xs text-slate-400">초기 관리자: 최철민 / 760112</p>
+          <p className="text-xs text-slate-400 font-bold">테스트 사용자: 박상일 / 701017</p>
         </div>
       </div>
     </div>
