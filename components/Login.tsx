@@ -105,7 +105,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               maxLength={6}
               value={birthDate}
               onChange={(e) => setBirthDate(e.target.value.replace(/[^0-9]/g, ''))}
-              placeholder="예: 760112"
+              placeholder="예: 850101"
               className="w-full px-5 py-4 bg-[#3f3f46] text-white border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all outline-none placeholder-slate-500 font-bold"
             />
           </div>
