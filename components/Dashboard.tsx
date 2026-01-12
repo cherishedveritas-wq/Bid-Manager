@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { PlusCircle, LogOut, Database, RefreshCw, Loader2, Calendar, Users } from 'lucide-react';
+import { PlusCircle, LogOut, Database, RefreshCw, Loader2, Calendar, Users, AlertTriangle } from 'lucide-react';
 import { Bid, BidCategory, BidResult, AppUser } from '../types';
 import StatsOverview from './StatsOverview';
 import BidTable from './BidTable';
@@ -63,12 +63,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, currentUser }) => {
   const [editingBid, setEditingBid] = useState<Bid | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSheetConnected, setIsSheetConnected] = useState(false);
+  const [connectionError, setConnectionError] = useState(false);
 
   const filteredBids = useMemo(() => {
     return allBids.filter(bid => bid.targetYear === selectedYear);
   }, [allBids, selectedYear]);
 
   const loadData = async () => {
+    setConnectionError(false);
     if (hasSheetUrl()) {
       setIsLoading(true);
       setIsSheetConnected(true);
@@ -80,8 +82,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, currentUser }) => {
           setAllBids([]);
         }
       } catch (error) {
-        console.error("Error loading data", error);
-        alert('데이터 로드 실패: 구글 시트 설정을 확인해주세요.');
+        console.error("Error loading data from Google Sheets", error);
+        setConnectionError(true);
+        // 연동 실패 시 로컬 더미 데이터라도 보여줌
+        if (allBids.length === 0) setAllBids(INITIAL_DATA);
       } finally {
         setIsLoading(false);
       }
@@ -139,6 +143,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, currentUser }) => {
           </div>
 
           <div className="flex items-center space-x-4">
+            {connectionError && (
+              <div className="flex items-center text-red-500 text-xs font-bold bg-red-50 px-3 py-1.5 rounded-full border border-red-100 animate-pulse">
+                <AlertTriangle className="w-3.5 h-3.5 mr-1.5" /> DB 연동 오류
+              </div>
+            )}
+            
             <div className="flex items-center bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">
               <div className="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse"></div>
               <span className="text-sm font-bold text-slate-600">{currentUser.name} {currentUser.isAdmin ? '(관리자)' : '(사용자)'}</span>
