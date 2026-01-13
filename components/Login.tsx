@@ -3,16 +3,11 @@ import React, { useState } from 'react';
 import { ShieldCheck, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { AppUser } from '../types';
 import { fetchUsersFromSheet, hasSheetUrl } from '../api';
+import { MASTER_USERS } from '../App';
 
 interface LoginProps {
   onLogin: (user: AppUser) => void;
 }
-
-// 시스템 기본 계정 (로컬 저장소가 비어있을 경우 대비)
-const MASTER_USERS: AppUser[] = [
-  { id: 'admin', name: '최철민', birthDate: '760112', password: '4422', isAdmin: true },
-  { id: 'user1', name: '박상일', birthDate: '701017', password: '3607', isAdmin: false },
-];
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [name, setName] = useState('');
@@ -32,26 +27,32 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     const inputPwd = password.trim();
 
     try {
-      // 1. 로컬 저장소에서 관리자가 추가한 사용자 목록 가져오기
+      // 1. 로컬 저장소 로드 (없으면 마스터 목록 사용)
       const storedUsers = localStorage.getItem('appUsers');
       let userList: AppUser[] = storedUsers ? JSON.parse(storedUsers) : [...MASTER_USERS];
       
-      // 2. 구글 시트(DB) 연동 시 클라우드 사용자 목록 병합
+      // 2. 클라우드 DB 연동 확인
       if (hasSheetUrl()) {
         try {
           const cloudUsers = await fetchUsersFromSheet();
           if (cloudUsers && cloudUsers.length > 0) {
-            // 중복 제거하며 병합 (id 기준)
+            // 중복 제거하며 병합 (ID 기준)
             const userMap = new Map();
-            [...userList, ...cloudUsers].forEach(u => userMap.set(u.id, u));
+            // 로컬(관리자 추가분 포함) 데이터 먼저 세팅
+            userList.forEach(u => userMap.set(u.id, u));
+            // 클라우드 데이터로 덮어쓰기/추가
+            cloudUsers.forEach(u => userMap.set(u.id, u));
             userList = Array.from(userMap.values());
+            
+            // 병합된 목록 최신화
+            localStorage.setItem('appUsers', JSON.stringify(userList));
           }
         } catch (apiErr) {
-          console.warn("Cloud sync failed, using local/master accounts only", apiErr);
+          console.warn("Cloud sync failed, using local accounts", apiErr);
         }
       }
 
-      // 3. 사용자 인증 시도
+      // 3. 인증 확인 (이름 + 생년월일 + 비밀번호)
       const foundUser = userList.find(
         (u: AppUser) => 
           u.name === inputName && 
@@ -82,15 +83,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         <h2 className="text-2xl sm:text-3xl font-black text-center text-slate-800 mb-2 tracking-tight">지수아이앤씨</h2>
         <p className="text-center text-slate-400 mb-8 sm:mb-10 font-bold text-sm sm:text-base">입찰 관리 시스템 로그인</p>
         
-        {!hasSheetUrl() && (
-          <div className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-start space-x-3 text-amber-700">
-            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-            <p className="text-[11px] font-bold leading-relaxed">
-              DB 연동 설정이 필요합니다. 관리자 계정으로 우선 접속하여 설정을 완료해주세요.
-            </p>
-          </div>
-        )}
-
         <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
           <div className="space-y-1.5">
             <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-widest">이름</label>

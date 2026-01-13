@@ -4,16 +4,12 @@ import { X, UserPlus, Trash2, Shield, User as UserIcon, Loader2, Key, Lock } fro
 import { AppUser } from '../types';
 import { generateId } from '../utils';
 import { fetchUsersFromSheet, syncUserToSheet, hasSheetUrl } from '../api';
+import { MASTER_USERS } from '../App';
 
 interface UserManagementModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
-
-const INITIAL_USERS: AppUser[] = [
-  { id: 'admin', name: '최철민', birthDate: '760112', password: '4422', isAdmin: true },
-  { id: 'user1', name: '박상일', birthDate: '701017', password: '3607', isAdmin: false },
-];
 
 const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClose }) => {
   const [users, setUsers] = useState<AppUser[]>([]);
@@ -23,7 +19,6 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
   const [newIsAdmin, setNewIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // 로컬 저장소 업데이트 헬퍼 함수
   const updateLocalStorage = (updatedUsers: AppUser[]) => {
     localStorage.setItem('appUsers', JSON.stringify(updatedUsers));
   };
@@ -31,22 +26,22 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
   const loadUsers = useCallback(async () => {
     setIsLoading(true);
     try {
-      // 1. 로컬 저장소에서 먼저 데이터 로드
       const storedUsers = localStorage.getItem('appUsers');
-      let localUsers = storedUsers ? JSON.parse(storedUsers) : INITIAL_USERS;
+      let localUsers = storedUsers ? JSON.parse(storedUsers) : [...MASTER_USERS];
 
-      // 2. 시트 연동 중이면 클라우드 데이터와 병합
       if (hasSheetUrl()) {
         const cloudUsers = await fetchUsersFromSheet();
         if (cloudUsers.length > 0) {
-          // 클라우드 데이터를 우선시하되 로컬 기본 계정 유지
           const userMap = new Map();
-          [...localUsers, ...cloudUsers].forEach(u => userMap.set(u.id, u));
+          localUsers.forEach(u => userMap.set(u.id, u));
+          cloudUsers.forEach(u => userMap.set(u.id, u));
           localUsers = Array.from(userMap.values());
           updateLocalStorage(localUsers);
         }
       }
       setUsers(localUsers);
+    } catch (e) {
+      console.error("Failed to load users", e);
     } finally {
       setIsLoading(false);
     }
@@ -67,7 +62,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
 
     setIsLoading(true);
     const newUser: AppUser = {
-      id: generateId(),
+      id: `user_${generateId()}`,
       name: newName,
       birthDate: newBirthDate,
       password: newPassword,
@@ -76,12 +71,10 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
     };
 
     try {
-      // 로컬 상태 및 저장소 즉시 업데이트
       const updatedUsers = [...users, newUser];
       setUsers(updatedUsers);
       updateLocalStorage(updatedUsers);
 
-      // 클라우드 동기화
       if (hasSheetUrl()) {
         await syncUserToSheet('createUser', newUser);
       }
@@ -90,6 +83,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
       setNewBirthDate('');
       setNewPassword('');
       setNewIsAdmin(false);
+      alert(`${newName} 사용자가 추가되었습니다.`);
     } catch (err) {
       alert('사용자 추가 중 오류가 발생했습니다.');
     } finally {
@@ -98,26 +92,25 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
   };
 
   const handleDeleteUser = async (id: string) => {
+    // 마스터 관리자 계정 보호
     if (id === 'admin') {
-      alert('기본 관리자 계정은 삭제할 수 없습니다.');
+      alert('시스템 관리자 계정은 삭제할 수 없습니다.');
       return;
     }
 
     if (window.confirm('해당 사용자를 삭제하시겠습니까?')) {
       setIsLoading(true);
       try {
-        // 로컬 상태 및 저장소 즉시 업데이트
         const updatedUsers = users.filter(user => user.id !== id);
         setUsers(updatedUsers);
         updateLocalStorage(updatedUsers);
 
-        // 클라우드 동기화
         if (hasSheetUrl()) {
           await syncUserToSheet('deleteUser', undefined, id);
         }
       } catch (err) {
         alert('사용자 삭제 중 오류가 발생했습니다.');
-        loadUsers(); // 오류 시 원복을 위해 재로드
+        loadUsers();
       } finally {
         setIsLoading(false);
       }
