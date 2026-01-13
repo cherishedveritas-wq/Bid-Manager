@@ -23,15 +23,30 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
   const [newIsAdmin, setNewIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  // 로컬 저장소 업데이트 헬퍼 함수
+  const updateLocalStorage = (updatedUsers: AppUser[]) => {
+    localStorage.setItem('appUsers', JSON.stringify(updatedUsers));
+  };
+
   const loadUsers = useCallback(async () => {
     setIsLoading(true);
     try {
+      // 1. 로컬 저장소에서 먼저 데이터 로드
+      const storedUsers = localStorage.getItem('appUsers');
+      let localUsers = storedUsers ? JSON.parse(storedUsers) : INITIAL_USERS;
+
+      // 2. 시트 연동 중이면 클라우드 데이터와 병합
       if (hasSheetUrl()) {
         const cloudUsers = await fetchUsersFromSheet();
-        setUsers(cloudUsers.length > 0 ? cloudUsers : INITIAL_USERS);
-      } else {
-        setUsers(INITIAL_USERS);
+        if (cloudUsers.length > 0) {
+          // 클라우드 데이터를 우선시하되 로컬 기본 계정 유지
+          const userMap = new Map();
+          [...localUsers, ...cloudUsers].forEach(u => userMap.set(u.id, u));
+          localUsers = Array.from(userMap.values());
+          updateLocalStorage(localUsers);
+        }
       }
+      setUsers(localUsers);
     } finally {
       setIsLoading(false);
     }
@@ -56,18 +71,30 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
       name: newName,
       birthDate: newBirthDate,
       password: newPassword,
-      isAdmin: newIsAdmin
+      isAdmin: newIsAdmin,
+      lastPasswordChangeDate: new Date().toISOString().split('T')[0]
     };
 
-    if (hasSheetUrl()) {
-      await syncUserToSheet('createUser', newUser);
+    try {
+      // 로컬 상태 및 저장소 즉시 업데이트
+      const updatedUsers = [...users, newUser];
+      setUsers(updatedUsers);
+      updateLocalStorage(updatedUsers);
+
+      // 클라우드 동기화
+      if (hasSheetUrl()) {
+        await syncUserToSheet('createUser', newUser);
+      }
+      
+      setNewName('');
+      setNewBirthDate('');
+      setNewPassword('');
+      setNewIsAdmin(false);
+    } catch (err) {
+      alert('사용자 추가 중 오류가 발생했습니다.');
+    } finally {
+      setIsLoading(false);
     }
-    
-    await loadUsers();
-    setNewName('');
-    setNewBirthDate('');
-    setNewPassword('');
-    setNewIsAdmin(false);
   };
 
   const handleDeleteUser = async (id: string) => {
@@ -78,10 +105,22 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
 
     if (window.confirm('해당 사용자를 삭제하시겠습니까?')) {
       setIsLoading(true);
-      if (hasSheetUrl()) {
-        await syncUserToSheet('deleteUser', undefined, id);
+      try {
+        // 로컬 상태 및 저장소 즉시 업데이트
+        const updatedUsers = users.filter(user => user.id !== id);
+        setUsers(updatedUsers);
+        updateLocalStorage(updatedUsers);
+
+        // 클라우드 동기화
+        if (hasSheetUrl()) {
+          await syncUserToSheet('deleteUser', undefined, id);
+        }
+      } catch (err) {
+        alert('사용자 삭제 중 오류가 발생했습니다.');
+        loadUsers(); // 오류 시 원복을 위해 재로드
+      } finally {
+        setIsLoading(false);
       }
-      await loadUsers();
     }
   };
 

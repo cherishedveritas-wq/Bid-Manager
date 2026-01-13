@@ -8,6 +8,7 @@ interface LoginProps {
   onLogin: (user: AppUser) => void;
 }
 
+// 시스템 기본 계정 (로컬 저장소가 비어있을 경우 대비)
 const MASTER_USERS: AppUser[] = [
   { id: 'admin', name: '최철민', birthDate: '760112', password: '4422', isAdmin: true },
   { id: 'user1', name: '박상일', birthDate: '701017', password: '3607', isAdmin: false },
@@ -31,19 +32,26 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     const inputPwd = password.trim();
 
     try {
-      let userList = [...MASTER_USERS];
+      // 1. 로컬 저장소에서 관리자가 추가한 사용자 목록 가져오기
+      const storedUsers = localStorage.getItem('appUsers');
+      let userList: AppUser[] = storedUsers ? JSON.parse(storedUsers) : [...MASTER_USERS];
       
+      // 2. 구글 시트(DB) 연동 시 클라우드 사용자 목록 병합
       if (hasSheetUrl()) {
         try {
           const cloudUsers = await fetchUsersFromSheet();
           if (cloudUsers && cloudUsers.length > 0) {
-            userList = [...cloudUsers, ...MASTER_USERS];
+            // 중복 제거하며 병합 (id 기준)
+            const userMap = new Map();
+            [...userList, ...cloudUsers].forEach(u => userMap.set(u.id, u));
+            userList = Array.from(userMap.values());
           }
         } catch (apiErr) {
-          console.warn("Cloud sync failed, using master accounts only", apiErr);
+          console.warn("Cloud sync failed, using local/master accounts only", apiErr);
         }
       }
 
+      // 3. 사용자 인증 시도
       const foundUser = userList.find(
         (u: AppUser) => 
           u.name === inputName && 
@@ -57,7 +65,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         setError('사용자 정보 또는 비밀번호가 일치하지 않습니다.');
       }
     } catch (err) {
-      setError('네트워크 연결 중 오류가 발생했습니다.');
+      setError('로그인 처리 중 오류가 발생했습니다.');
     } finally {
       setIsLoading(false);
     }
