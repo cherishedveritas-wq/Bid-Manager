@@ -1,10 +1,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, UserPlus, Trash2, Shield, User as UserIcon, Loader2, Key, Lock } from 'lucide-react';
-import { AppUser } from '../types';
+import { AppUser, MASTER_USERS } from '../types';
 import { generateId } from '../utils';
 import { fetchUsersFromSheet, syncUserToSheet, hasSheetUrl } from '../api';
-import { MASTER_USERS } from '../App';
 
 interface UserManagementModalProps {
   isOpen: boolean;
@@ -63,9 +62,9 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
     setIsLoading(true);
     const newUser: AppUser = {
       id: `user_${generateId()}`,
-      name: newName,
-      birthDate: newBirthDate,
-      password: newPassword,
+      name: newName.trim(),
+      birthDate: newBirthDate.trim(),
+      password: newPassword.trim(),
       isAdmin: newIsAdmin,
       lastPasswordChangeDate: new Date().toISOString().split('T')[0]
     };
@@ -92,7 +91,6 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
   };
 
   const handleDeleteUser = async (id: string) => {
-    // 마스터 관리자 계정 보호
     if (id === 'admin') {
       alert('시스템 관리자 계정은 삭제할 수 없습니다.');
       return;
@@ -120,7 +118,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto font-['Noto_Sans_KR']">
       <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh] scale-in-center">
         <div className="flex justify-between items-center p-8 border-b border-slate-50">
           <h2 className="text-[26px] font-bold text-[#1e293b] flex items-center tracking-tight">
@@ -151,7 +149,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
                   type="text"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  className="w-full bg-[#3f3f46] text-white border-none rounded-2xl px-5 py-4 text-sm focus:ring-2 focus:ring-blue-500 outline-none placeholder-slate-500 font-bold"
+                  className="w-full bg-[#3f3f46] text-white border-none rounded-2xl px-5 py-4 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold"
                   placeholder="홍길동"
                 />
               </div>
@@ -160,10 +158,11 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
                 <input
                   required
                   type="text"
+                  inputMode="numeric"
                   maxLength={6}
                   value={newBirthDate}
                   onChange={(e) => setNewBirthDate(e.target.value.replace(/[^0-9]/g, ''))}
-                  className="w-full bg-[#3f3f46] text-white border-none rounded-2xl px-5 py-4 text-sm focus:ring-2 focus:ring-blue-500 outline-none placeholder-slate-500 font-bold"
+                  className="w-full bg-[#3f3f46] text-white border-none rounded-2xl px-5 py-4 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold"
                   placeholder="610101"
                 />
               </div>
@@ -174,8 +173,8 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
                   type="text"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full bg-[#3f3f46] text-white border-none rounded-2xl px-5 py-4 text-sm focus:ring-2 focus:ring-blue-500 outline-none placeholder-slate-500 font-bold"
-                  placeholder="초기 비번 설정"
+                  className="w-full bg-[#3f3f46] text-white border-none rounded-2xl px-5 py-4 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold"
+                  placeholder="비번 설정"
                 />
               </div>
               <div className="flex items-center gap-4 justify-between">
@@ -189,15 +188,15 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
                   />
                   <label htmlFor="modalIsAdminCheck" className="text-[15px] font-bold text-slate-600 cursor-pointer select-none">관리자</label>
                 </div>
-                <button type="submit" className="bg-[#2563eb] hover:bg-blue-700 text-white px-6 py-4 rounded-2xl text-[17px] font-bold flex items-center transition-all shadow-lg active:scale-95 whitespace-nowrap">
+                <button type="submit" className="bg-[#2563eb] hover:bg-blue-700 text-white px-6 py-4 rounded-2xl text-[17px] font-bold transition-all shadow-lg active:scale-95 whitespace-nowrap">
                   추가하기
                 </button>
               </div>
             </form>
           </div>
 
-          <div className="border border-slate-100 rounded-[2.5rem] overflow-hidden shadow-sm bg-white">
-            <table className="w-full text-sm text-left border-collapse">
+          <div className="border border-slate-100 rounded-[2.5rem] overflow-hidden shadow-sm bg-white overflow-x-auto">
+            <table className="w-full text-sm text-left border-collapse min-w-[600px]">
               <thead className="bg-slate-50 text-slate-400 text-[13px] font-bold border-b border-slate-100">
                 <tr>
                   <th className="px-8 py-6">사용자명</th>
@@ -211,12 +210,12 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
                 {users.map(user => (
                   <tr key={user.id} className="hover:bg-slate-50/50 transition-colors group">
                     <td className="px-8 py-5 font-bold text-[#1e293b] flex items-center">
-                      <div className="w-11 h-11 rounded-full bg-slate-100 flex items-center justify-center mr-4 text-slate-400 border border-slate-200">
+                      <div className="w-11 h-11 rounded-full bg-slate-100 flex items-center justify-center mr-4 text-slate-400 border border-slate-200 shrink-0">
                         <UserIcon className="w-5 h-5" />
                       </div>
-                      <span className="text-[16px]">{user.name}</span>
+                      <span className="text-[16px] whitespace-nowrap">{user.name}</span>
                     </td>
-                    <td className="px-8 py-5 text-slate-400 font-medium text-[16px]">{user.birthDate}</td>
+                    <td className="px-8 py-5 text-slate-400 font-medium text-[16px] whitespace-nowrap">{user.birthDate}</td>
                     <td className="px-8 py-5">
                       <div className="flex items-center text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 w-fit">
                         <Key className="w-3.5 h-3.5 mr-2 text-blue-400" />
