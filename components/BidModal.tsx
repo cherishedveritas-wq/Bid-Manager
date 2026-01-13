@@ -22,7 +22,7 @@ const emptyBid: Bid = {
   clientName: '',
   manager: '',
   projectName: '',
-  method: '입찰',
+  method: '', // '입찰' 기본값 삭제
   schedule: '',
   contractPeriod: '',
   competitors: '',
@@ -168,7 +168,7 @@ const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, onSave, initialDat
                   <input
                     type="text"
                     name="method"
-                    placeholder="경쟁입찰/수의/가격제안"
+                    placeholder="입찰/수의/가격"
                     value={formData.method}
                     onChange={handleChange}
                     className={inputClass}
