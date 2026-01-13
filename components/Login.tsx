@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { AppUser, MASTER_USERS } from '../types';
 import { fetchUsersFromSheet, hasSheetUrl } from '../api';
@@ -16,18 +16,38 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  // 컴포넌트 마운트 시 로컬 저장소 최신화 (로그인 프로세스 단축)
+  useEffect(() => {
+    if (hasSheetUrl()) {
+      fetchUsersFromSheet().then(cloudUsers => {
+        if (cloudUsers.length > 0) {
+          try {
+            const stored = localStorage.getItem('appUsers');
+            const localUsers = stored ? JSON.parse(stored) : [...MASTER_USERS];
+            const userMap = new Map();
+            localUsers.forEach((u: any) => userMap.set(u.id, u));
+            cloudUsers.forEach(u => userMap.set(u.id, u));
+            localStorage.setItem('appUsers', JSON.stringify(Array.from(userMap.values())));
+          } catch (e) {
+            console.error("Background sync error", e);
+          }
+        }
+      }).catch(() => {});
+    }
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
     
-    // 모바일 자동 완성이나 띄어쓰기 대응을 위한 trim() 강화
-    const inputName = name.replace(/\s/g, '');
-    const inputBirth = birthDate.replace(/\s/g, '');
+    // 1. 입력값 정규화 (모든 공백 제거)
+    const normInputName = name.replace(/\s/g, '');
+    const normInputBirth = birthDate.replace(/\s/g, '');
     const inputPwd = password.trim();
 
     try {
-      // 1. 유저 목록 소스 확보 (로컬 -> 마스터)
+      // 2. 현재 사용 가능한 유저 목록 확보
       let userList: AppUser[] = [...MASTER_USERS];
       try {
         const storedUsers = localStorage.getItem('appUsers');
@@ -38,40 +58,27 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           }
         }
       } catch (e) {
-        console.warn("Storage access failed, using master list");
-      }
-      
-      // 2. 시트 데이터 연동 (네트워크 상태 확인)
-      if (hasSheetUrl()) {
-        try {
-          const cloudUsers = await fetchUsersFromSheet();
-          if (cloudUsers && cloudUsers.length > 0) {
-            const userMap = new Map();
-            userList.forEach(u => userMap.set(u.id, u));
-            cloudUsers.forEach(u => userMap.set(u.id, u));
-            userList = Array.from(userMap.values());
-            localStorage.setItem('appUsers', JSON.stringify(userList));
-          }
-        } catch (apiErr) {
-          console.warn("Cloud sync failed on mobile network");
-        }
+        console.warn("Storage access failed");
       }
 
-      // 3. 인증 검사
-      const foundUser = userList.find(
-        (u: AppUser) => 
-          u.name === inputName && 
-          u.birthDate === inputBirth && 
+      // 3. 인증 검사 (비교 대상도 정규화하여 비교)
+      const foundUser = userList.find((u: AppUser) => {
+        const normStoredName = u.name.replace(/\s/g, '');
+        const normStoredBirth = u.birthDate.replace(/\s/g, '');
+        return (
+          normStoredName === normInputName && 
+          normStoredBirth === normInputBirth && 
           (u.password === inputPwd || (!u.password && inputPwd === ''))
-      );
+        );
+      });
 
       if (foundUser) {
         onLogin(foundUser);
       } else {
-        setError('정보가 일치하지 않습니다. (이름/생일/비번 확인)');
+        setError('로그인 정보를 다시 확인해주세요. (이름, 생일 6자리, 비번)');
       }
     } catch (err) {
-      setError('시스템 오류가 발생했습니다. 다시 시도해주세요.');
+      setError('시스템 오류가 발생했습니다. 브라우저를 새로고침 해주세요.');
     } finally {
       setIsLoading(false);
     }
@@ -94,12 +101,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <input
               type="text"
               required
-              autoComplete="name"
+              autoCapitalize="none"
+              autoCorrect="off"
               disabled={isLoading}
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="이름 입력"
-              className="w-full px-5 py-4 bg-[#f1f5f9] text-slate-800 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl transition-all outline-none placeholder-slate-400 font-bold"
+              className="w-full px-5 py-4 bg-[#f1f5f9] text-slate-800 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl transition-all outline-none placeholder-slate-400 font-bold text-base"
             />
           </div>
           
@@ -115,7 +123,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               value={birthDate}
               onChange={(e) => setBirthDate(e.target.value.replace(/[^0-9]/g, ''))}
               placeholder="예: 610101"
-              className="w-full px-5 py-4 bg-[#f1f5f9] text-slate-800 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl transition-all outline-none placeholder-slate-400 font-bold"
+              className="w-full px-5 py-4 bg-[#f1f5f9] text-slate-800 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl transition-all outline-none placeholder-slate-400 font-bold text-base"
             />
           </div>
 
@@ -129,12 +137,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="비밀번호 입력"
-                className="w-full px-5 py-4 bg-[#f1f5f9] text-slate-800 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl transition-all outline-none placeholder-slate-400 font-bold pr-12"
+                className="w-full px-5 py-4 bg-[#f1f5f9] text-slate-800 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl transition-all outline-none placeholder-slate-400 font-bold pr-12 text-base"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 p-2"
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
@@ -142,7 +150,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </div>
 
           {error && (
-            <div className="bg-red-50 text-red-600 text-[13px] py-3.5 px-4 rounded-2xl text-center font-bold border border-red-100">
+            <div className="bg-red-50 text-red-600 text-[13px] py-3.5 px-4 rounded-2xl text-center font-bold border border-red-100 flex items-center justify-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
               {error}
             </div>
           )}
@@ -150,7 +159,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl transition-all shadow-xl shadow-blue-100 active:scale-[0.98] text-lg flex justify-center items-center mt-4"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl transition-all shadow-xl shadow-blue-100 active:scale-[0.98] text-lg flex justify-center items-center mt-4 disabled:bg-slate-300 disabled:shadow-none"
           >
             {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : '로그인 하기'}
           </button>
