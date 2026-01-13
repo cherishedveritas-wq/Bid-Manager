@@ -12,6 +12,7 @@ interface SheetConfigModalProps {
 const APPS_SCRIPT_CODE = `// 아래 코드를 복사하여 Apps Script에 덮어쓰기 하세요.
 const BID_SHEET_NAME = "Bids";
 const USER_SHEET_NAME = "Users";
+const USER_HEADERS = ["id", "name", "birthDate", "password", "isAdmin", "lastPasswordChangeDate"];
 
 function doGet(e) {
   const action = e.parameter.action;
@@ -25,7 +26,7 @@ function doGet(e) {
   
   // 데이터 읽기 (사용자)
   if (action === 'readUsers') {
-    const sheet = getOrCreateSheet(ss, USER_SHEET_NAME, ["id", "name", "birthDate", "isAdmin"]);
+    const sheet = getOrCreateSheet(ss, USER_SHEET_NAME, USER_HEADERS);
     return createJsonResponse({ users: getRowsData(sheet) });
   }
 }
@@ -38,10 +39,11 @@ function doPost(e) {
   if (action === 'create' || action === 'update' || action === 'delete') {
     const sheet = getOrCreateSheet(ss, BID_SHEET_NAME);
     handleAction(sheet, action, data, id);
-  } else if (action === 'createUser' || action === 'deleteUser') {
-    const sheet = getOrCreateSheet(ss, USER_SHEET_NAME, ["id", "name", "birthDate", "isAdmin"]);
+  } else if (action === 'createUser' || action === 'updateUser' || action === 'deleteUser') {
+    const sheet = getOrCreateSheet(ss, USER_SHEET_NAME, USER_HEADERS);
     if (action === 'createUser') handleAction(sheet, 'create', user);
-    if (action === 'deleteUser') handleAction(sheet, 'delete', null, id);
+    else if (action === 'updateUser') handleAction(sheet, 'update', user, user.id);
+    else if (action === 'deleteUser') handleAction(sheet, 'delete', null, id);
   }
 
   return createJsonResponse({ result: 'success' });
@@ -99,7 +101,6 @@ const SheetConfigModal: React.FC<SheetConfigModalProps> = ({ isOpen, onClose, on
 
   useEffect(() => {
     if (isOpen) {
-      // 로컬 스토리지가 비어있어도 DEFAULT_SHEET_URL이 반환됨
       setUrlInput(getSheetUrl());
       setTestResult(null);
     }

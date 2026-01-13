@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { ShieldCheck, Loader2, AlertCircle } from 'lucide-react';
+import { ShieldCheck, Loader2, AlertCircle, Eye, EyeOff, Lock } from 'lucide-react';
 import { AppUser } from '../types';
 import { fetchUsersFromSheet, hasSheetUrl } from '../api';
 
@@ -8,14 +8,17 @@ interface LoginProps {
   onLogin: (user: AppUser) => void;
 }
 
+// 초기 마스터 계정 (사용자 요청에 따른 업데이트: 최철민 4422, 박상일 3607 유지)
 const MASTER_USERS: AppUser[] = [
-  { id: 'admin', name: '최철민', birthDate: '760112', isAdmin: true },
-  { id: 'user1', name: '박상일', birthDate: '701017', isAdmin: false },
+  { id: 'admin', name: '최철민', birthDate: '760112', password: '4422', isAdmin: true },
+  { id: 'user1', name: '박상일', birthDate: '701017', password: '3607', isAdmin: false },
 ];
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [name, setName] = useState('');
   const [birthDate, setBirthDate] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -24,19 +27,17 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setIsLoading(true);
     setError('');
     
-    // 입력값 정리 (공백 제거)
     const inputName = name.trim();
     const inputBirth = birthDate.trim();
+    const inputPwd = password.trim();
 
     try {
       let userList = [...MASTER_USERS];
       
-      // 1. 구글 시트 연동 정보가 있으면 클라우드에서 사용자 정보를 가져와 합침
       if (hasSheetUrl()) {
         try {
           const cloudUsers = await fetchUsersFromSheet();
           if (cloudUsers && cloudUsers.length > 0) {
-            // 마스터 계정이 클라우드 명단에 없더라도 로그인 가능하도록 병합
             userList = [...cloudUsers, ...MASTER_USERS];
           }
         } catch (apiErr) {
@@ -44,15 +45,17 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         }
       }
 
-      // 2. 사용자 찾기 (중복 시 isAdmin 우선)
       const foundUser = userList.find(
-        (u: AppUser) => u.name === inputName && u.birthDate === inputBirth
+        (u: AppUser) => 
+          u.name === inputName && 
+          u.birthDate === inputBirth && 
+          (u.password === inputPwd || (!u.password && inputPwd === ''))
       );
 
       if (foundUser) {
         onLogin(foundUser);
       } else {
-        setError('사용자 정보가 일치하지 않습니다.');
+        setError('사용자 정보 또는 비밀번호가 일치하지 않습니다.');
       }
     } catch (err) {
       setError('네트워크 연결 중 오류가 발생했습니다.');
@@ -82,9 +85,9 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-400 ml-1">이름</label>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-400 ml-1 uppercase tracking-wider">이름</label>
             <input
               type="text"
               required
@@ -96,8 +99,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             />
           </div>
           
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-400 ml-1">생년월일(6자리)</label>
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-400 ml-1 uppercase tracking-wider">생년월일 (6자리)</label>
             <input
               type="text"
               required
@@ -105,13 +108,36 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               maxLength={6}
               value={birthDate}
               onChange={(e) => setBirthDate(e.target.value.replace(/[^0-9]/g, ''))}
-              placeholder="예: 850101"
+              placeholder="예: 610101"
               className="w-full px-5 py-4 bg-[#3f3f46] text-white border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all outline-none placeholder-slate-500 font-bold"
             />
           </div>
 
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-400 ml-1 uppercase tracking-wider">비밀번호</label>
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                required
+                disabled={isLoading}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="비밀번호 입력"
+                className="w-full px-5 py-4 bg-[#3f3f46] text-white border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all outline-none placeholder-slate-500 font-bold pr-12"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
+          </div>
+
           {error && (
-            <div className="bg-red-50 text-red-500 text-sm py-3 px-4 rounded-xl text-center font-bold animate-pulse">
+            <div className="bg-red-50 text-red-500 text-sm py-3 px-4 rounded-xl text-center font-bold animate-pulse flex items-center justify-center gap-2">
+              <AlertCircle className="w-4 h-4" />
               {error}
             </div>
           )}
@@ -119,7 +145,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-[#2563eb] hover:bg-blue-700 text-white font-bold py-4 rounded-2xl transition-all shadow-lg hover:shadow-blue-200 active:scale-[0.98] text-lg flex justify-center items-center"
+            className="w-full bg-[#2563eb] hover:bg-blue-700 text-white font-bold py-4 rounded-2xl transition-all shadow-lg hover:shadow-blue-200 active:scale-[0.98] text-lg flex justify-center items-center mt-4"
           >
             {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : '로그인'}
           </button>

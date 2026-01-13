@@ -90,7 +90,7 @@ export async function fetchUsersFromSheet(): Promise<AppUser[]> {
   }
 }
 
-export async function syncUserToSheet(action: 'createUser' | 'deleteUser', user?: AppUser, id?: string): Promise<boolean> {
+export async function syncUserToSheet(action: 'createUser' | 'updateUser' | 'deleteUser', user?: AppUser, id?: string): Promise<boolean> {
   const url = getSheetUrl();
   if (!url) return false;
   try {

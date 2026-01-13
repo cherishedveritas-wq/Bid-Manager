@@ -1,17 +1,20 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { PlusCircle, LogOut, Database, RefreshCw, Loader2, Calendar, Users, AlertTriangle, RotateCw } from 'lucide-react';
+import { PlusCircle, LogOut, Database, RefreshCw, Loader2, Calendar, Users, AlertTriangle, RotateCw, Lock } from 'lucide-react';
 import { Bid, BidCategory, BidResult, AppUser } from '../types';
 import StatsOverview from './StatsOverview';
 import BidTable from './BidTable';
 import BidModal from './BidModal';
 import SheetConfigModal from './SheetConfigModal';
 import UserManagementModal from './UserManagementModal';
+import ChangePasswordModal from './ChangePasswordModal';
 import { fetchBids, syncBidToSheet, hasSheetUrl } from '../api';
 
 interface DashboardProps {
   onLogout: () => void;
   currentUser: AppUser;
+  onUpdateUser: (user: AppUser) => void;
+  forceChangePassword?: boolean;
 }
 
 const currentYear = new Date().getFullYear();
@@ -54,16 +57,23 @@ const INITIAL_DATA: Bid[] = [
   }
 ];
 
-const Dashboard: React.FC<DashboardProps> = ({ onLogout, currentUser }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onLogout, currentUser, onUpdateUser, forceChangePassword = false }) => {
   const [allBids, setAllBids] = useState<Bid[]>([]);
   const [selectedYear, setSelectedYear] = useState<number>(2026);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(forceChangePassword);
   const [editingBid, setEditingBid] = useState<Bid | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSheetConnected, setIsSheetConnected] = useState(false);
   const [connectionError, setConnectionError] = useState(false);
+
+  useEffect(() => {
+    if (forceChangePassword) {
+      setIsPasswordModalOpen(true);
+    }
+  }, [forceChangePassword]);
 
   const filteredBids = useMemo(() => {
     return allBids.filter(bid => bid.targetYear === selectedYear);
@@ -169,16 +179,27 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, currentUser }) => {
             </div>
 
             <div className="flex items-center space-x-2">
-              {currentUser.isAdmin && (
-                <button onClick={() => setIsUserModalOpen(true)} className="flex items-center space-x-1 text-sm px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors">
-                  <Users className="w-4 h-4 mr-1" />
-                  사용자 관리
-                </button>
-              )}
-              <button onClick={() => setIsConfigOpen(true)} className="flex items-center space-x-1 text-sm px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors">
-                <Database className="w-4 h-4 mr-1" />
-                DB 설정
+              <button 
+                onClick={() => setIsPasswordModalOpen(true)}
+                className="flex items-center space-x-1 text-sm px-3 py-1.5 text-slate-600 hover:text-blue-600 transition-colors"
+                title="비밀번호 변경"
+              >
+                <Lock className="w-4 h-4" />
+                <span>비번변경</span>
               </button>
+
+              {currentUser.isAdmin && (
+                <>
+                  <button onClick={() => setIsUserModalOpen(true)} className="flex items-center space-x-1 text-sm px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors">
+                    <Users className="w-4 h-4 mr-1" />
+                    사용자 관리
+                  </button>
+                  <button onClick={() => setIsConfigOpen(true)} className="flex items-center space-x-1 text-sm px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors">
+                    <Database className="w-4 h-4 mr-1" />
+                    DB 설정
+                  </button>
+                </>
+              )}
               <div className="h-4 w-px bg-slate-200 mx-1"></div>
               <button onClick={onLogout} className="flex items-center space-x-1 text-sm text-slate-500 hover:text-red-600 px-2 py-1.5 transition-colors">
                 <LogOut className="w-4 h-4 mr-1" />
@@ -224,6 +245,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, currentUser }) => {
       <BidModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveBid} initialData={editingBid} defaultYear={selectedYear} />
       <SheetConfigModal isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} onSaved={loadData} />
       <UserManagementModal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} />
+      <ChangePasswordModal 
+        isOpen={isPasswordModalOpen} 
+        onClose={() => !forceChangePassword && setIsPasswordModalOpen(false)} 
+        currentUser={currentUser}
+        onPasswordChanged={onUpdateUser}
+        isMandatory={forceChangePassword}
+      />
     </div>
   );
 };
