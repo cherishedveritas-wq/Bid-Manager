@@ -33,7 +33,7 @@ export interface Bid {
 export interface AppUser {
   id: string;
   name: string;
-  birthDate: string; // 6자리 (ex: 850101)
+  birthDate: string; // 6자리 (ex: 610101)
   password?: string;
   isAdmin: boolean;
   lastPasswordChangeDate?: string; // ISO 8601 string (ex: 2023-10-27)

@@ -132,7 +132,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen, onClo
                   value={newBirthDate}
                   onChange={(e) => setNewBirthDate(e.target.value.replace(/[^0-9]/g, ''))}
                   className="w-full bg-[#3f3f46] text-white border-none rounded-2xl px-5 py-4 text-sm focus:ring-2 focus:ring-blue-500 outline-none placeholder-slate-500 font-bold"
-                  placeholder="850101"
+                  placeholder="610101"
                 />
               </div>
               <div>
