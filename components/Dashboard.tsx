@@ -21,7 +21,7 @@ const YEAR_OPTIONS = Array.from({ length: 7 }, (_, i) => currentYear - 1 + i);
 
 const INITIAL_DATA: Bid[] = [
   {
-    id: '1',
+    id: 'initial_bid_1',
     targetYear: 2025,
     category: BidCategory.NEW,
     clientName: '로보트보쉬코리아',
@@ -38,7 +38,7 @@ const INITIAL_DATA: Bid[] = [
     remarks: '당사 불참'
   },
   {
-    id: '5',
+    id: 'initial_bid_5',
     targetYear: 2026,
     category: BidCategory.EXISTING,
     clientName: '현대엔지니어링',
@@ -101,14 +101,23 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, currentUser, onUpdateUs
 
   const handleSaveBid = async (bid: Bid) => {
     const isEdit = !!editingBid;
-    let newAllBids = isEdit ? allBids.map(item => item.id === bid.id ? bid : item) : [bid, ...allBids];
-    setAllBids(newAllBids);
+    
+    // 상태 업데이트 로직 개선: 이전 상태를 기반으로 정교하게 매칭
+    setAllBids(prev => {
+      if (isEdit) {
+        // 수정 모드: ID가 같은 항목 '하나'만 교체
+        return prev.map(item => item.id === bid.id ? { ...bid } : item);
+      } else {
+        // 신규 등록: 목록 맨 앞에 추가
+        return [{ ...bid }, ...prev];
+      }
+    });
 
     if (isSheetConnected) {
       const action = isEdit ? 'update' : 'create';
       const success = await syncBidToSheet(action, bid);
       if (!success) {
-        alert('데이터 동기화에 실패했습니다.');
+        alert('서버 동기화에 실패했습니다. 데이터를 다시 불러옵니다.');
         loadData();
       }
     }

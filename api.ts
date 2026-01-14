@@ -1,5 +1,6 @@
 
 import { Bid, AppUser } from './types';
+import { generateId } from './utils';
 
 const STORAGE_KEY = 'googleSheetUrl';
 export const DEFAULT_SHEET_URL = 'https://script.google.com/macros/s/AKfycbxLZloLUk0buA3OHI-BiGTGc39qHeoCYn-KW8SjlsHDicaVcpQAlb7p41CSNUx0uB8D/exec';
@@ -56,11 +57,26 @@ export async function fetchBids(): Promise<Bid[]> {
   try {
     const response = await fetchWithTimeout(`${url}?action=read`, {}, 8000);
     const data = await response.json();
-    return (data.items || []).map((item: any) => ({
-      ...item,
-      proposalAmount: Number(item.proposalAmount) || 0,
-      targetYear: Number(item.targetYear) || 2026
-    }));
+    const items = data.items || [];
+    
+    // ID가 중복되거나 없는 경우를 대비한 처리
+    const seenIds = new Set();
+    return items.map((item: any) => {
+      let finalId = item.id ? String(item.id).trim() : '';
+      
+      // ID가 없거나 이미 본 ID라면 새로 생성 (데이터 충돌 방지 핵심)
+      if (!finalId || seenIds.has(finalId)) {
+        finalId = `bid_${generateId()}`;
+      }
+      seenIds.add(finalId);
+
+      return {
+        ...item,
+        id: finalId,
+        proposalAmount: Number(item.proposalAmount) || 0,
+        targetYear: Number(item.targetYear) || 2026
+      };
+    });
   } catch (error) {
     console.error("Failed to fetch bids", error);
     throw error;
@@ -72,7 +88,11 @@ export async function syncBidToSheet(action: 'create' | 'update' | 'delete', dat
   try {
     const response = await fetchWithTimeout(url, {
       method: 'POST',
-      body: JSON.stringify({ action, data, id: id || data?.id })
+      body: JSON.stringify({ 
+        action, 
+        data, 
+        id: id || data?.id 
+      })
     }, 10000);
     return response.ok;
   } catch (error) {
