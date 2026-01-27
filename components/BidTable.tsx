@@ -21,13 +21,14 @@ interface SortConfig {
 const BidTable: React.FC<BidTableProps> = ({ bids, onEdit, onDelete }) => {
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: null, direction: 'asc' });
 
-  // Initial column configuration
+  // 컬럼 구성 업데이트: '업무개시일' 추가 및 'PM 담당자'까지만 sticky 적용
   const initialCols = [
     { name: 'NO', key: 'id' as SortKey, width: 50, align: 'center' as const, sortable: false, sticky: true },
     { name: '구분', key: 'category' as SortKey, width: 60, align: 'center' as const, sortable: true, sticky: true },
     { name: '고객사', key: 'clientName' as SortKey, width: 140, align: 'left' as const, sortable: true, sticky: true },
-    { name: 'PM 담당자', key: 'manager' as SortKey, width: 100, align: 'left' as const, sortable: true, sticky: true },
-    { name: '프로젝트/입찰명', key: 'projectName' as SortKey, width: 240, align: 'left' as const, sortable: true, sticky: true },
+    { name: 'PM 담당자', key: 'manager' as SortKey, width: 110, align: 'left' as const, sortable: true, sticky: true },
+    { name: '프로젝트/입찰명', key: 'projectName' as SortKey, width: 240, align: 'left' as const, sortable: true, sticky: false },
+    { name: '업무개시일', key: 'workStartDate' as SortKey, width: 100, align: 'center' as const, sortable: true, sticky: false },
     { name: '방식', key: 'method' as SortKey, width: 80, align: 'center' as const, sortable: true, sticky: false },
     { name: '일정', key: 'schedule' as SortKey, width: 180, align: 'left' as const, sortable: true, sticky: false },
     { name: '계약기간', key: 'contractPeriod' as SortKey, width: 140, align: 'left' as const, sortable: true, sticky: false },
@@ -42,7 +43,6 @@ const BidTable: React.FC<BidTableProps> = ({ bids, onEdit, onDelete }) => {
 
   const [cols, setCols] = useState(initialCols);
   
-  // 가로 틀 고정을 위한 각 컬럼의 left 오프셋 계산
   const getLeftOffset = (index: number) => {
     let offset = 0;
     for (let i = 0; i < index; i++) {
@@ -53,7 +53,6 @@ const BidTable: React.FC<BidTableProps> = ({ bids, onEdit, onDelete }) => {
     return offset;
   };
 
-  // Refs for resizing logic
   const activeIndex = useRef<number | null>(null);
   const activeStartWidth = useRef<number>(0);
   const activeStartX = useRef<number>(0);
@@ -167,7 +166,6 @@ const BidTable: React.FC<BidTableProps> = ({ bids, onEdit, onDelete }) => {
                       {col.name}
                       {renderSortIcon(col)}
                     </div>
-                    {/* Resizer Handle */}
                     <div 
                       className="absolute right-0 top-0 w-1.5 h-full cursor-col-resize hover:bg-blue-400 z-50 transition-colors"
                       onMouseDown={(e) => handleMouseDown(e, index)}
@@ -181,7 +179,7 @@ const BidTable: React.FC<BidTableProps> = ({ bids, onEdit, onDelete }) => {
             {sortedBids.length === 0 ? (
               <tr>
                 <td colSpan={cols.length} className="text-center py-20 text-slate-400 text-sm bg-white">
-                  해당 연도에 등록된 입찰 정보가 없습니다.
+                  등록된 정보가 없습니다.
                 </td>
               </tr>
             ) : (
@@ -191,7 +189,6 @@ const BidTable: React.FC<BidTableProps> = ({ bids, onEdit, onDelete }) => {
                     const isLastSticky = col.sticky && !cols[colIndex + 1]?.sticky;
                     const left = col.sticky ? getLeftOffset(colIndex) : undefined;
                     
-                    // Render cell content based on key
                     let content: React.ReactNode = '-';
                     if (col.name === 'NO') content = index + 1;
                     else if (col.key === 'category') {
@@ -234,7 +231,6 @@ const BidTable: React.FC<BidTableProps> = ({ bids, onEdit, onDelete }) => {
                           ${isLastSticky ? 'shadow-[2px_0_5px_-2px_rgba(0,0,0,0.15)] border-r-slate-300' : ''}
                           ${col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left'}
                           ${col.key === 'projectName' || col.key === 'clientName' ? 'font-bold text-slate-800' : 'text-slate-600'}
-                          ${col.key === 'proposalAmount' ? 'bg-amber-50/10 font-bold' : ''}
                         `}
                         style={{ 
                           left: left !== undefined ? `${left}px` : undefined 

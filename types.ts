@@ -19,6 +19,7 @@ export interface Bid {
   clientName: string;
   manager: string;
   projectName: string;
+  workStartDate: string; // 업무개시일 추가
   method: string;
   schedule: string;
   contractPeriod: string;

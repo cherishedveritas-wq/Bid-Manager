@@ -12,7 +12,7 @@ interface SheetConfigModalProps {
 const APPS_SCRIPT_CODE = `// 아래 코드를 복사하여 Apps Script에 덮어쓰기 하세요.
 const BID_SHEET_NAME = "Bids";
 const USER_SHEET_NAME = "Users";
-const BID_HEADERS = ["id", "targetYear", "category", "clientName", "manager", "projectName", "method", "schedule", "contractPeriod", "competitors", "proposalAmount", "statusDetail", "result", "preferredBidder", "remarks"];
+const BID_HEADERS = ["id", "targetYear", "category", "clientName", "manager", "projectName", "workStartDate", "method", "schedule", "contractPeriod", "competitors", "proposalAmount", "statusDetail", "result", "preferredBidder", "remarks"];
 const USER_ACC_HEADERS = ["id", "name", "birthDate", "password", "isAdmin", "lastPasswordChangeDate"];
 
 function doGet(e) {
@@ -104,8 +104,6 @@ function handleAction(sheet, action, data, id) {
         break;
       }
     }
-    // 수정 요청인데 ID를 못 찾은 경우: 
-    // 기존 시트에 ID가 비어있는 행이 많을 수 있으므로 신규 추가하여 데이터가 유실되지 않게 함
     if (!found && action === 'update') {
       sheet.appendRow(headers.map(h => data[h] !== undefined ? data[h] : ""));
     }

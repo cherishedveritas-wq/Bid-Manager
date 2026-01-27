@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Save, Calendar, ArrowRight } from 'lucide-react';
+import { X, Save, Calendar, ArrowRight, ClipboardCheck } from 'lucide-react';
 import { Bid, BidCategory, BidResult } from '../types';
 import { generateId, formatNumberWithCommas, parseNumberFromCommas } from '../utils';
 
@@ -15,6 +15,14 @@ interface BidModalProps {
 const currentYear = new Date().getFullYear();
 const YEAR_OPTIONS = Array.from({ length: 7 }, (_, i) => currentYear - 1 + i);
 
+const getTodayFormatted = () => {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
 const emptyBid: Bid = {
   id: '',
   targetYear: 2026,
@@ -22,7 +30,8 @@ const emptyBid: Bid = {
   clientName: '',
   manager: '',
   projectName: '',
-  method: '', // '입찰' 기본값 삭제
+  workStartDate: '',
+  method: '',
   schedule: '',
   contractPeriod: '',
   competitors: '',
@@ -41,7 +50,6 @@ const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, onSave, initialDat
   useEffect(() => {
     if (initialData) {
       setFormData(initialData);
-      // 계약기간 문자열 분리 (YYYY.MM.DD ~ YYYY.MM.DD)
       if (initialData.contractPeriod.includes(' ~ ')) {
         const [start, end] = initialData.contractPeriod.split(' ~ ');
         setStartDate(start.replace(/\./g, '-'));
@@ -51,13 +59,17 @@ const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, onSave, initialDat
         setEndDate('');
       }
     } else {
-      setFormData({ ...emptyBid, id: generateId(), targetYear: defaultYear || 2026 });
+      setFormData({ 
+        ...emptyBid, 
+        id: generateId(), 
+        targetYear: defaultYear || 2026,
+        workStartDate: getTodayFormatted() // 신규 등록 시 오늘 날짜를 기본값으로 설정
+      });
       setStartDate('');
       setEndDate('');
     }
   }, [initialData, isOpen, defaultYear]);
 
-  // 날짜 선택 시 계약기간 문자열 업데이트
   useEffect(() => {
     if (startDate && endDate) {
       const formattedPeriod = `${startDate.replace(/-/g, '.')} ~ ${endDate.replace(/-/g, '.')}`;
@@ -67,7 +79,6 @@ const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, onSave, initialDat
 
   if (!isOpen) return null;
 
-  // 시작일 변경 시 종료일 자동 계산 (1년 뒤)
   const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newStart = e.target.value;
     setStartDate(newStart);
@@ -75,10 +86,8 @@ const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, onSave, initialDat
     if (newStart) {
       const start = new Date(newStart);
       if (!isNaN(start.getTime())) {
-        // 1년 후 계산
         const end = new Date(start);
         end.setFullYear(start.getFullYear() + 1);
-        // 보통 계약은 1년 단위 시 시작일 전날 종료 (ex: 2026.02.01 ~ 2027.01.31)
         end.setDate(end.getDate() - 1);
         
         const yyyy = end.getFullYear();
@@ -128,7 +137,6 @@ const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, onSave, initialDat
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 custom-scrollbar">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-            {/* Left Column: 기본 정보 */}
             <div className="space-y-6">
               <h3 className="text-[17px] font-bold text-blue-600 flex items-center mb-6">
                 기본 정보
@@ -213,6 +221,20 @@ const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, onSave, initialDat
                 />
               </div>
 
+              <div>
+                <label className={labelClass}>
+                  <ClipboardCheck className="w-3.5 h-3.5 mr-1.5 inline" /> 업무개시일
+                </label>
+                <input
+                  type="date"
+                  name="workStartDate"
+                  value={formData.workStartDate}
+                  onChange={handleChange}
+                  className={`${inputClass} appearance-none`}
+                  style={{ colorScheme: 'dark' }}
+                />
+              </div>
+
                <div>
                 <label className={labelClass}>계약기간 (달력 선택)</label>
                 <div className="flex items-center gap-2">
@@ -236,11 +258,9 @@ const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, onSave, initialDat
                     />
                   </div>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-2 ml-1">* 시작일 선택 시 종료일이 자동으로 1년 뒤로 설정됩니다.</p>
               </div>
             </div>
 
-            {/* Right Column: 입찰 진행 상세 */}
             <div className="space-y-6">
               <h3 className="text-[17px] font-bold text-blue-600 flex items-center mb-6">
                 입찰 진행 상세
@@ -319,7 +339,7 @@ const BidModal: React.FC<BidModalProps> = ({ isOpen, onClose, onSave, initialDat
                   value={formData.remarks}
                   onChange={handleChange}
                   rows={3}
-                  placeholder="* 준공후 시설변경(복합-> 상온) 및 임대진행중&#10;* 도급비 지급 문제없음 확약"
+                  placeholder="* 특이사항 등"
                   className={`${inputClass} resize-none leading-relaxed`}
                 />
               </div>

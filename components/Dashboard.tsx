@@ -27,6 +27,7 @@ const INITIAL_DATA: Bid[] = [
     clientName: '로보트보쉬코리아',
     manager: '영업부 최철민',
     projectName: '보쉬 용인 오피스/세종 공장 보안/미화관리',
+    workStartDate: '2026-01-01',
     method: '입찰',
     schedule: '현설 9/25(목)\n공고 9/26(금)\n제출 10/17(금)',
     contractPeriod: '2026.1.1 ~ 12.31',
