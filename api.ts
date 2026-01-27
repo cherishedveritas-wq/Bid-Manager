@@ -60,19 +60,18 @@ export async function fetchBids(): Promise<Bid[]> {
     const data = await response.json();
     const items = data.items || [];
     
-    const seenIds = new Set();
     return items.map((item: any) => {
       let finalId = item.id !== null && item.id !== undefined && String(item.id).trim() !== "" 
         ? String(item.id).trim() 
-        : `temp_${generateId()}`; // 시트에 ID가 없으면 temp_ 접두사를 붙여서 생성
+        : `temp_${generateId()}`;
       
-      seenIds.add(finalId);
-
       return {
         ...item,
         id: finalId,
         proposalAmount: Number(item.proposalAmount) || 0,
-        targetYear: Number(item.targetYear) || 2026
+        targetYear: Number(item.targetYear) || 2026,
+        // 시트에서 날짜가 누락되어 오더라도 앱에서 에러가 나지 않도록 처리
+        workStartDate: item.workStartDate || ''
       };
     });
   } catch (error) {

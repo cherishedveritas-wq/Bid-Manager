@@ -21,12 +21,12 @@ function doGet(e) {
   
   if (action === 'read' || !action) {
     const sheet = getOrCreateSheet(ss, BID_SHEET_NAME, BID_HEADERS);
-    return createJsonResponse({ items: getRowsData(sheet) });
+    return createJsonResponse({ items: getRowsData(ss, sheet) });
   }
   
   if (action === 'readUsers') {
     const sheet = getOrCreateSheet(ss, USER_SHEET_NAME, USER_ACC_HEADERS);
-    return createJsonResponse({ users: getRowsData(sheet) });
+    return createJsonResponse({ users: getRowsData(ss, sheet) });
   }
 }
 
@@ -62,19 +62,35 @@ function getOrCreateSheet(ss, name, defaultHeaders) {
   if (!sheet) {
     sheet = ss.insertSheet(name);
     sheet.appendRow(defaultHeaders);
+  } else {
+    // 중요: 기존 시트에 누락된 헤더가 있으면 자동으로 추가 (업무개시일 대응)
+    const existingHeaders = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 1)).getValues()[0];
+    defaultHeaders.forEach(h => {
+      if (existingHeaders.indexOf(h) === -1) {
+        const nextCol = sheet.getLastColumn() + 1;
+        sheet.getRange(1, nextCol).setValue(h);
+      }
+    });
   }
   return sheet;
 }
 
-function getRowsData(sheet) {
+function getRowsData(ss, sheet) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
   const rows = sheet.getDataRange().getValues();
   const headers = rows[0];
+  const tz = ss.getSpreadsheetTimeZone();
+
   return rows.slice(1).map(row => {
     let obj = {};
     headers.forEach((h, i) => { 
-      obj[h] = (row[i] === "" || row[i] === undefined) ? null : row[i]; 
+      let val = row[i];
+      // 날짜 객체인 경우 YYYY-MM-DD 문자열로 변환하여 앱 호환성 유지
+      if (val instanceof Date) {
+        val = Utilities.formatDate(val, tz, "yyyy-MM-dd");
+      }
+      obj[h] = (val === "" || val === undefined) ? null : val; 
     });
     return obj;
   });
@@ -86,7 +102,7 @@ function handleAction(sheet, action, data, id) {
   let headers = rows[0];
   
   const idIdx = headers.indexOf('id');
-  if (idIdx === -1) throw new Error("'id' 컬럼을 찾을 수 없습니다. 시트 첫 번째 행에 'id'를 추가하세요.");
+  if (idIdx === -1) throw new Error("'id' 컬럼을 찾을 수 없습니다.");
 
   if (action === 'create') {
     sheet.appendRow(headers.map(h => data[h] !== undefined ? data[h] : ""));
@@ -172,23 +188,14 @@ const SheetConfigModal: React.FC<SheetConfigModalProps> = ({ isOpen, onClose, on
 
         <div className="p-8 space-y-8 overflow-y-auto max-h-[70vh] custom-scrollbar">
           <div className="bg-amber-50 border border-amber-100 p-6 rounded-3xl text-sm text-slate-600">
-            <p className="mb-2 font-bold text-amber-800 text-base">⚠️ 기존 데이터 수정 안됨 해결법</p>
+             <p className="mb-2 font-bold text-amber-800 text-base">⚠️ 업무개시일 반영 안됨 해결법</p>
             <div className="flex items-start gap-3 bg-white/50 p-4 rounded-2xl border border-amber-200 mb-4">
               <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
               <p className="text-amber-900 leading-relaxed font-medium">
-                구글 시트를 직접 열어서 <b>'id' 열(보통 A열)</b>에 비어있는 행이 있다면, 
-                그곳에 <code className="bg-amber-100 px-1 rounded">bid_01</code>, 
-                <code className="bg-amber-100 px-1 rounded">bid_02</code>와 같이 
-                중복되지 않는 값을 직접 입력해 주세요. 그래야 앱에서 수정한 내용이 DB에 반영됩니다.
+                새로운 컬럼(업무개시일)을 반영하려면 반드시 아래의 <b>'코드 복사하기'</b>를 통해 Apps Script를 업데이트하고 <b>[새 배포]</b>를 진행해야 합니다. 
+                스크립트가 기존 시트에 누락된 컬럼을 자동으로 추가해 줍니다.
               </p>
             </div>
-            <p className="mb-2 font-bold text-amber-800">연동 방법 안내</p>
-            <ol className="list-decimal ml-4 space-y-1 font-medium text-amber-700">
-              <li>아래의 <b>'코드 복사하기'</b> 버튼을 누르세요.</li>
-              <li>구글 시트 메뉴 [확장 프로그램] -> [Apps Script]로 들어갑니다.</li>
-              <li>기존 내용을 지우고 붙여넣은 뒤 <b>[배포] -> [새 배포]</b>를 누릅니다.</li>
-              <li>액세스 권한을 <b>'모든 사람(Anyone)'</b>으로 설정하고 완료된 URL을 입력하세요.</li>
-            </ol>
           </div>
 
           <div className="space-y-3">
