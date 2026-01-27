@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Save, Link, CheckCircle, AlertCircle, Copy, Code, Loader2, PlayCircle } from 'lucide-react';
+import { X, Save, Link, CheckCircle, AlertCircle, Copy, Code, Loader2, PlayCircle, Info } from 'lucide-react';
 import { getSheetUrl, setSheetUrl, testSheetConnection, DEFAULT_SHEET_URL } from '../api';
 
 interface SheetConfigModalProps {
@@ -12,7 +12,7 @@ interface SheetConfigModalProps {
 const APPS_SCRIPT_CODE = `// 아래 코드를 복사하여 Apps Script에 덮어쓰기 하세요.
 const BID_SHEET_NAME = "Bids";
 const USER_SHEET_NAME = "Users";
-const USER_HEADERS = ["id", "targetYear", "category", "clientName", "manager", "projectName", "method", "schedule", "contractPeriod", "competitors", "proposalAmount", "statusDetail", "result", "preferredBidder", "remarks"];
+const BID_HEADERS = ["id", "targetYear", "category", "clientName", "manager", "projectName", "method", "schedule", "contractPeriod", "competitors", "proposalAmount", "statusDetail", "result", "preferredBidder", "remarks"];
 const USER_ACC_HEADERS = ["id", "name", "birthDate", "password", "isAdmin", "lastPasswordChangeDate"];
 
 function doGet(e) {
@@ -20,7 +20,7 @@ function doGet(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
   if (action === 'read' || !action) {
-    const sheet = getOrCreateSheet(ss, BID_SHEET_NAME, USER_HEADERS);
+    const sheet = getOrCreateSheet(ss, BID_SHEET_NAME, BID_HEADERS);
     return createJsonResponse({ items: getRowsData(sheet) });
   }
   
@@ -43,7 +43,7 @@ function doPost(e) {
 
   try {
     if (action === 'create' || action === 'update' || action === 'delete') {
-      const sheet = getOrCreateSheet(ss, BID_SHEET_NAME, USER_HEADERS);
+      const sheet = getOrCreateSheet(ss, BID_SHEET_NAME, BID_HEADERS);
       handleAction(sheet, action, data, id);
     } else if (action === 'createUser' || action === 'updateUser' || action === 'deleteUser') {
       const sheet = getOrCreateSheet(ss, USER_SHEET_NAME, USER_ACC_HEADERS);
@@ -85,22 +85,8 @@ function handleAction(sheet, action, data, id) {
   let rows = sheet.getDataRange().getValues();
   let headers = rows[0];
   
-  // 시트가 비어있거나 헤더만 있는 경우 처리
-  if (lastRow <= 1 && (action === 'create' || action === 'update')) {
-    if (action === 'update' || action === 'create') {
-      const finalData = data || {};
-      // 헤더가 비어있다면 데이터의 키값을 헤더로 사용
-      if (!headers || headers.length === 0 || headers[0] === "") {
-        headers = Object.keys(finalData);
-        sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-      }
-      sheet.appendRow(headers.map(h => finalData[h] !== undefined ? finalData[h] : ""));
-      return;
-    }
-  }
-
   const idIdx = headers.indexOf('id');
-  if (idIdx === -1) throw new Error("'id' 컬럼을 찾을 수 없습니다.");
+  if (idIdx === -1) throw new Error("'id' 컬럼을 찾을 수 없습니다. 시트 첫 번째 행에 'id'를 추가하세요.");
 
   if (action === 'create') {
     sheet.appendRow(headers.map(h => data[h] !== undefined ? data[h] : ""));
@@ -118,7 +104,8 @@ function handleAction(sheet, action, data, id) {
         break;
       }
     }
-    // 수정 대상을 못 찾았는데 수정 요청인 경우, 신규 생성으로 간주 (초기 데이터 동기화용)
+    // 수정 요청인데 ID를 못 찾은 경우: 
+    // 기존 시트에 ID가 비어있는 행이 많을 수 있으므로 신규 추가하여 데이터가 유실되지 않게 함
     if (!found && action === 'update') {
       sheet.appendRow(headers.map(h => data[h] !== undefined ? data[h] : ""));
     }
@@ -187,12 +174,22 @@ const SheetConfigModal: React.FC<SheetConfigModalProps> = ({ isOpen, onClose, on
 
         <div className="p-8 space-y-8 overflow-y-auto max-h-[70vh] custom-scrollbar">
           <div className="bg-amber-50 border border-amber-100 p-6 rounded-3xl text-sm text-slate-600">
-            <p className="mb-2 font-bold text-amber-800 text-base">⚠️ 연동 방법 안내</p>
+            <p className="mb-2 font-bold text-amber-800 text-base">⚠️ 기존 데이터 수정 안됨 해결법</p>
+            <div className="flex items-start gap-3 bg-white/50 p-4 rounded-2xl border border-amber-200 mb-4">
+              <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-amber-900 leading-relaxed font-medium">
+                구글 시트를 직접 열어서 <b>'id' 열(보통 A열)</b>에 비어있는 행이 있다면, 
+                그곳에 <code className="bg-amber-100 px-1 rounded">bid_01</code>, 
+                <code className="bg-amber-100 px-1 rounded">bid_02</code>와 같이 
+                중복되지 않는 값을 직접 입력해 주세요. 그래야 앱에서 수정한 내용이 DB에 반영됩니다.
+              </p>
+            </div>
+            <p className="mb-2 font-bold text-amber-800">연동 방법 안내</p>
             <ol className="list-decimal ml-4 space-y-1 font-medium text-amber-700">
               <li>아래의 <b>'코드 복사하기'</b> 버튼을 누르세요.</li>
               <li>구글 시트 메뉴 [확장 프로그램] -> [Apps Script]로 들어갑니다.</li>
-              <li>기존 내용을 모두 지우고 복사한 코드를 붙여넣은 뒤 <b>[배포] -> [새 배포]</b>를 누릅니다.</li>
-              <li>액세스 권한을 <b>'모든 사람(Anyone)'</b>으로 설정하고 배포 후 생성된 URL을 아래에 입력하세요.</li>
+              <li>기존 내용을 지우고 붙여넣은 뒤 <b>[배포] -> [새 배포]</b>를 누릅니다.</li>
+              <li>액세스 권한을 <b>'모든 사람(Anyone)'</b>으로 설정하고 완료된 URL을 입력하세요.</li>
             </ol>
           </div>
 

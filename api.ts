@@ -62,11 +62,10 @@ export async function fetchBids(): Promise<Bid[]> {
     
     const seenIds = new Set();
     return items.map((item: any) => {
-      let finalId = item.id !== null && item.id !== undefined ? String(item.id).trim() : '';
+      let finalId = item.id !== null && item.id !== undefined && String(item.id).trim() !== "" 
+        ? String(item.id).trim() 
+        : `temp_${generateId()}`; // 시트에 ID가 없으면 temp_ 접두사를 붙여서 생성
       
-      if (!finalId || seenIds.has(finalId)) {
-        finalId = `bid_${generateId()}`;
-      }
       seenIds.add(finalId);
 
       return {

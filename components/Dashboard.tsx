@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { PlusCircle, LogOut, Database, RefreshCw, Loader2, Calendar, Users, AlertTriangle, RotateCw, Lock, Menu, X } from 'lucide-react';
+import { PlusCircle, LogOut, Database, RefreshCw, Loader2, Calendar, Users, AlertTriangle, RotateCw, Lock, Menu, X, Info } from 'lucide-react';
 import { Bid, BidCategory, BidResult, AppUser } from '../types';
 import StatsOverview from './StatsOverview';
 import BidTable from './BidTable';
@@ -54,6 +54,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, currentUser, onUpdateUs
   const [isSheetConnected, setIsSheetConnected] = useState(false);
   const [connectionError, setConnectionError] = useState(false);
 
+  // 시트에 ID가 없는 데이터가 있는지 체크 (api.ts에서 prefix를 붙여서 가져오기 때문)
+  const hasIncompleteData = useMemo(() => {
+    return allBids.some(bid => bid.id.startsWith('temp_') || bid.id.includes('bid_gen_'));
+  }, [allBids]);
+
   const filteredBids = useMemo(() => {
     return allBids.filter(bid => bid.targetYear === selectedYear);
   }, [allBids, selectedYear]);
@@ -88,17 +93,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, currentUser, onUpdateUs
     setIsSaving(true);
 
     try {
-      // 1. 서버 동기화 먼저 시도 (실시간성 확보)
       if (isSheetConnected) {
         const action = isEdit ? 'update' : 'create';
         const success = await syncBidToSheet(action, bid);
         
         if (!success) {
-          throw new Error('서버 동기화에 실패했습니다.');
+          throw new Error('서버 동기화에 실패했습니다. 구글 시트의 ID 컬럼을 확인하세요.');
         }
       }
 
-      // 2. 로컬 상태 업데이트
       setAllBids(prev => {
         if (isEdit) {
           return prev.map(item => item.id === bid.id ? { ...bid } : item);
@@ -107,12 +110,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, currentUser, onUpdateUs
         }
       });
 
-      // 3. 성공 알림 및 모달 닫기
       setIsModalOpen(false);
       setEditingBid(null);
     } catch (error: any) {
-      alert(error.message || '데이터 저장 중 오류가 발생했습니다. 네트워크 상태를 확인하세요.');
-      // 실패 시 데이터 재로드
+      alert(error.message || '데이터 저장 중 오류가 발생했습니다.');
       loadData();
     } finally {
       setIsSaving(false);
@@ -239,6 +240,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, currentUser, onUpdateUs
       </header>
 
       <main className="flex-1 max-w-[1920px] w-full mx-auto px-4 sm:px-6 py-6 overflow-x-hidden flex flex-col">
+        {hasIncompleteData && isSheetConnected && (
+          <div className="mb-6 bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-4 animate-pulse">
+            <Info className="w-6 h-6 text-amber-600 shrink-0" />
+            <div className="flex-1">
+              <p className="text-amber-900 font-bold text-sm">구글 시트에 ID값이 비어있는 데이터가 발견되었습니다.</p>
+              <p className="text-amber-700 text-xs">수정 내용을 반영하려면 구글 시트의 'id' 열에 값을 직접 입력하거나 [DB 설정] 도움말을 확인하세요.</p>
+            </div>
+            <button 
+              onClick={() => setIsConfigOpen(true)}
+              className="bg-amber-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-amber-700 transition-colors"
+            >
+              해결방법 보기
+            </button>
+          </div>
+        )}
+
         <StatsOverview bids={filteredBids} year={selectedYear} />
 
         <div className="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
