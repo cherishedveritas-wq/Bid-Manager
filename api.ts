@@ -85,25 +85,34 @@ export async function fetchBids(): Promise<Bid[]> {
 export async function syncBidToSheet(action: 'create' | 'update' | 'delete', data?: Bid, id?: string): Promise<boolean> {
   const url = getSheetUrl();
   try {
-    // text/plain을 사용하는 이유는 application/json 전송 시 
-    // 브라우저가 Preflight(OPTIONS) 요청을 보내는데 GAS가 이를 거부하기 때문입니다.
+    const payload = { 
+      action, 
+      data, 
+      id: id || data?.id 
+    };
+
     const response = await fetchWithTimeout(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'text/plain;charset=utf-8'
       },
-      body: JSON.stringify({ 
-        action, 
-        data, 
-        id: id || data?.id 
-      })
+      body: JSON.stringify(payload)
     }, 15000);
     
-    if (!response.ok) return false;
+    if (!response.ok) {
+      console.error("Sync failed with status:", response.status);
+      return false;
+    }
+
     const result = await response.json();
-    return result.result === 'success';
+    if (result.result !== 'success') {
+      console.error("GAS Server returned error:", result.message);
+      return false;
+    }
+    
+    return true;
   } catch (error) {
-    console.error("Sync error:", error);
+    console.error("Sync connection error:", error);
     return false;
   }
 }

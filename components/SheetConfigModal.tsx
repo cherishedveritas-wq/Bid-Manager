@@ -12,19 +12,20 @@ interface SheetConfigModalProps {
 const APPS_SCRIPT_CODE = `// 아래 코드를 복사하여 Apps Script에 덮어쓰기 하세요.
 const BID_SHEET_NAME = "Bids";
 const USER_SHEET_NAME = "Users";
-const USER_HEADERS = ["id", "name", "birthDate", "password", "isAdmin", "lastPasswordChangeDate"];
+const USER_HEADERS = ["id", "targetYear", "category", "clientName", "manager", "projectName", "method", "schedule", "contractPeriod", "competitors", "proposalAmount", "statusDetail", "result", "preferredBidder", "remarks"];
+const USER_ACC_HEADERS = ["id", "name", "birthDate", "password", "isAdmin", "lastPasswordChangeDate"];
 
 function doGet(e) {
   const action = e.parameter.action;
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
   if (action === 'read' || !action) {
-    const sheet = getOrCreateSheet(ss, BID_SHEET_NAME);
+    const sheet = getOrCreateSheet(ss, BID_SHEET_NAME, USER_HEADERS);
     return createJsonResponse({ items: getRowsData(sheet) });
   }
   
   if (action === 'readUsers') {
-    const sheet = getOrCreateSheet(ss, USER_SHEET_NAME, USER_HEADERS);
+    const sheet = getOrCreateSheet(ss, USER_SHEET_NAME, USER_ACC_HEADERS);
     return createJsonResponse({ users: getRowsData(sheet) });
   }
 }
@@ -42,10 +43,10 @@ function doPost(e) {
 
   try {
     if (action === 'create' || action === 'update' || action === 'delete') {
-      const sheet = getOrCreateSheet(ss, BID_SHEET_NAME);
+      const sheet = getOrCreateSheet(ss, BID_SHEET_NAME, USER_HEADERS);
       handleAction(sheet, action, data, id);
     } else if (action === 'createUser' || action === 'updateUser' || action === 'deleteUser') {
-      const sheet = getOrCreateSheet(ss, USER_SHEET_NAME, USER_HEADERS);
+      const sheet = getOrCreateSheet(ss, USER_SHEET_NAME, USER_ACC_HEADERS);
       if (action === 'createUser') handleAction(sheet, 'create', user);
       else if (action === 'updateUser') handleAction(sheet, 'update', user, user.id);
       else if (action === 'deleteUser') handleAction(sheet, 'delete', null, id);
@@ -56,23 +57,24 @@ function doPost(e) {
   }
 }
 
-function getOrCreateSheet(ss, name, headers = null) {
+function getOrCreateSheet(ss, name, defaultHeaders) {
   let sheet = ss.getSheetByName(name);
   if (!sheet) {
     sheet = ss.insertSheet(name);
-    if (headers) sheet.appendRow(headers);
+    sheet.appendRow(defaultHeaders);
   }
   return sheet;
 }
 
 function getRowsData(sheet) {
-  if (sheet.getLastRow() < 2) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
   const rows = sheet.getDataRange().getValues();
   const headers = rows[0];
   return rows.slice(1).map(row => {
     let obj = {};
     headers.forEach((h, i) => { 
-      obj[h] = row[i] === "" ? null : row[i]; 
+      obj[h] = (row[i] === "" || row[i] === undefined) ? null : row[i]; 
     });
     return obj;
   });
@@ -80,25 +82,32 @@ function getRowsData(sheet) {
 
 function handleAction(sheet, action, data, id) {
   const lastRow = sheet.getLastRow();
-  if (lastRow === 0 && action === 'create') {
-    const keys = Object.keys(data);
-    sheet.appendRow(keys);
-    sheet.appendRow(keys.map(k => data[k]));
-    return;
+  let rows = sheet.getDataRange().getValues();
+  let headers = rows[0];
+  
+  // 시트가 비어있거나 헤더만 있는 경우 처리
+  if (lastRow <= 1 && (action === 'create' || action === 'update')) {
+    if (action === 'update' || action === 'create') {
+      const finalData = data || {};
+      // 헤더가 비어있다면 데이터의 키값을 헤더로 사용
+      if (!headers || headers.length === 0 || headers[0] === "") {
+        headers = Object.keys(finalData);
+        sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+      }
+      sheet.appendRow(headers.map(h => finalData[h] !== undefined ? finalData[h] : ""));
+      return;
+    }
   }
 
-  const rows = sheet.getDataRange().getValues();
-  const headers = rows[0];
   const idIdx = headers.indexOf('id');
+  if (idIdx === -1) throw new Error("'id' 컬럼을 찾을 수 없습니다.");
 
   if (action === 'create') {
     sheet.appendRow(headers.map(h => data[h] !== undefined ? data[h] : ""));
   } else {
-    if (idIdx === -1) throw new Error("'id' column not found");
-    const targetId = String(id);
+    const targetId = String(id || (data && data.id));
     let found = false;
     for (let i = 1; i < rows.length; i++) {
-      // ID를 문자열로 강제 변환하여 정확히 비교
       if (String(rows[i][idIdx]) === targetId) {
         if (action === 'update') {
           sheet.getRange(i + 1, 1, 1, headers.length).setValues([headers.map(h => data[h] !== undefined ? data[h] : "")]);
@@ -109,8 +118,8 @@ function handleAction(sheet, action, data, id) {
         break;
       }
     }
+    // 수정 대상을 못 찾았는데 수정 요청인 경우, 신규 생성으로 간주 (초기 데이터 동기화용)
     if (!found && action === 'update') {
-      // 만약 업데이트 대상을 못 찾으면 신규로 생성 (ID 유실 방지)
       sheet.appendRow(headers.map(h => data[h] !== undefined ? data[h] : ""));
     }
   }
