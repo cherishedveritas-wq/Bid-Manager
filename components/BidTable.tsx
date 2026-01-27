@@ -21,7 +21,7 @@ interface SortConfig {
 const BidTable: React.FC<BidTableProps> = ({ bids, onEdit, onDelete }) => {
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: null, direction: 'asc' });
 
-  // 컬럼 구성 업데이트: '업무개시일' 추가 및 'PM 담당자'까지만 sticky 적용
+  // 컬럼 구성
   const initialCols = [
     { name: 'NO', key: 'id' as SortKey, width: 50, align: 'center' as const, sortable: false, sticky: true },
     { name: '구분', key: 'category' as SortKey, width: 60, align: 'center' as const, sortable: true, sticky: true },
@@ -210,6 +210,12 @@ const BidTable: React.FC<BidTableProps> = ({ bids, onEdit, onDelete }) => {
                           'bg-blue-50 text-blue-600'
                         }`}>{bid.result}</span>
                       );
+                    }
+                    else if (col.key === 'workStartDate') {
+                      // 날짜에 ISO 타임스탬프(T...)가 포함된 경우 잘라내기
+                      const rawDate = bid.workStartDate ? String(bid.workStartDate) : '';
+                      content = rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+                      if (!content) content = '-';
                     }
                     else if (col.name === '관리') {
                       content = (

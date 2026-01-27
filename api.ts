@@ -65,13 +65,16 @@ export async function fetchBids(): Promise<Bid[]> {
         ? String(item.id).trim() 
         : `temp_${generateId()}`;
       
+      // 업무개시일 포맷팅 (YYYY-MM-DD 만 남기기)
+      let wsDate = item.workStartDate ? String(item.workStartDate) : '';
+      if (wsDate.includes('T')) wsDate = wsDate.split('T')[0];
+      
       return {
         ...item,
         id: finalId,
         proposalAmount: Number(item.proposalAmount) || 0,
         targetYear: Number(item.targetYear) || 2026,
-        // 시트에서 날짜가 누락되어 오더라도 앱에서 에러가 나지 않도록 처리
-        workStartDate: item.workStartDate || ''
+        workStartDate: wsDate
       };
     });
   } catch (error) {
