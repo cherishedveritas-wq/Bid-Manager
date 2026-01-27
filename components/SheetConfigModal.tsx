@@ -18,13 +18,11 @@ function doGet(e) {
   const action = e.parameter.action;
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  // 데이터 읽기 (입찰)
   if (action === 'read' || !action) {
     const sheet = getOrCreateSheet(ss, BID_SHEET_NAME);
     return createJsonResponse({ items: getRowsData(sheet) });
   }
   
-  // 데이터 읽기 (사용자)
   if (action === 'readUsers') {
     const sheet = getOrCreateSheet(ss, USER_SHEET_NAME, USER_HEADERS);
     return createJsonResponse({ users: getRowsData(sheet) });
@@ -33,20 +31,29 @@ function doGet(e) {
 
 function doPost(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const payload = JSON.parse(e.postData.contents);
+  let payload;
+  try {
+    payload = JSON.parse(e.postData.contents);
+  } catch (err) {
+    return createJsonResponse({ result: 'error', message: 'Invalid JSON' });
+  }
+  
   const { action, data, user, id } = payload;
 
-  if (action === 'create' || action === 'update' || action === 'delete') {
-    const sheet = getOrCreateSheet(ss, BID_SHEET_NAME);
-    handleAction(sheet, action, data, id);
-  } else if (action === 'createUser' || action === 'updateUser' || action === 'deleteUser') {
-    const sheet = getOrCreateSheet(ss, USER_SHEET_NAME, USER_HEADERS);
-    if (action === 'createUser') handleAction(sheet, 'create', user);
-    else if (action === 'updateUser') handleAction(sheet, 'update', user, user.id);
-    else if (action === 'deleteUser') handleAction(sheet, 'delete', null, id);
+  try {
+    if (action === 'create' || action === 'update' || action === 'delete') {
+      const sheet = getOrCreateSheet(ss, BID_SHEET_NAME);
+      handleAction(sheet, action, data, id);
+    } else if (action === 'createUser' || action === 'updateUser' || action === 'deleteUser') {
+      const sheet = getOrCreateSheet(ss, USER_SHEET_NAME, USER_HEADERS);
+      if (action === 'createUser') handleAction(sheet, 'create', user);
+      else if (action === 'updateUser') handleAction(sheet, 'update', user, user.id);
+      else if (action === 'deleteUser') handleAction(sheet, 'delete', null, id);
+    }
+    return createJsonResponse({ result: 'success' });
+  } catch (err) {
+    return createJsonResponse({ result: 'error', message: err.toString() });
   }
-
-  return createJsonResponse({ result: 'success' });
 }
 
 function getOrCreateSheet(ss, name, headers = null) {
@@ -64,32 +71,54 @@ function getRowsData(sheet) {
   const headers = rows[0];
   return rows.slice(1).map(row => {
     let obj = {};
-    headers.forEach((h, i) => { obj[h] = row[i]; });
+    headers.forEach((h, i) => { 
+      obj[h] = row[i] === "" ? null : row[i]; 
+    });
     return obj;
   });
 }
 
 function handleAction(sheet, action, data, id) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow === 0 && action === 'create') {
+    const keys = Object.keys(data);
+    sheet.appendRow(keys);
+    sheet.appendRow(keys.map(k => data[k]));
+    return;
+  }
+
   const rows = sheet.getDataRange().getValues();
   const headers = rows[0];
   const idIdx = headers.indexOf('id');
 
   if (action === 'create') {
-    if (sheet.getLastRow() === 0) sheet.appendRow(Object.keys(data));
-    sheet.appendRow(headers.map(h => data[h]));
+    sheet.appendRow(headers.map(h => data[h] !== undefined ? data[h] : ""));
   } else {
+    if (idIdx === -1) throw new Error("'id' column not found");
+    const targetId = String(id);
+    let found = false;
     for (let i = 1; i < rows.length; i++) {
-      if (rows[i][idIdx] === id) {
-        if (action === 'update') sheet.getRange(i + 1, 1, 1, headers.length).setValues([headers.map(h => data[h])]);
-        else if (action === 'delete') sheet.deleteRow(i + 1);
+      // ID를 문자열로 강제 변환하여 정확히 비교
+      if (String(rows[i][idIdx]) === targetId) {
+        if (action === 'update') {
+          sheet.getRange(i + 1, 1, 1, headers.length).setValues([headers.map(h => data[h] !== undefined ? data[h] : "")]);
+        } else if (action === 'delete') {
+          sheet.deleteRow(i + 1);
+        }
+        found = true;
         break;
       }
+    }
+    if (!found && action === 'update') {
+      // 만약 업데이트 대상을 못 찾으면 신규로 생성 (ID 유실 방지)
+      sheet.appendRow(headers.map(h => data[h] !== undefined ? data[h] : ""));
     }
   }
 }
 
 function createJsonResponse(data) {
-  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
+  return ContentService.createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 `;
 
@@ -148,15 +177,20 @@ const SheetConfigModal: React.FC<SheetConfigModalProps> = ({ isOpen, onClose, on
         </div>
 
         <div className="p-8 space-y-8 overflow-y-auto max-h-[70vh] custom-scrollbar">
-          <div className="bg-emerald-50 border border-emerald-100 p-6 rounded-3xl text-sm text-slate-600">
-            <p className="mb-2 font-bold text-emerald-800 text-base">✅ 공용 DB URL이 설정되어 있습니다.</p>
-            <p className="font-medium text-emerald-700">제공해주신 고정 주소가 기본값으로 적용되었습니다. 별도 수정을 원치 않으시면 그대로 사용하시면 됩니다.</p>
+          <div className="bg-amber-50 border border-amber-100 p-6 rounded-3xl text-sm text-slate-600">
+            <p className="mb-2 font-bold text-amber-800 text-base">⚠️ 연동 방법 안내</p>
+            <ol className="list-decimal ml-4 space-y-1 font-medium text-amber-700">
+              <li>아래의 <b>'코드 복사하기'</b> 버튼을 누르세요.</li>
+              <li>구글 시트 메뉴 [확장 프로그램] -> [Apps Script]로 들어갑니다.</li>
+              <li>기존 내용을 모두 지우고 복사한 코드를 붙여넣은 뒤 <b>[배포] -> [새 배포]</b>를 누릅니다.</li>
+              <li>액세스 권한을 <b>'모든 사람(Anyone)'</b>으로 설정하고 배포 후 생성된 URL을 아래에 입력하세요.</li>
+            </ol>
           </div>
 
           <div className="space-y-3">
             <div className="flex justify-between items-end mb-1">
               <label className="text-sm font-bold text-slate-500 flex items-center">
-                <Code className="w-4 h-4 mr-1.5" /> Apps Script 코드 (새 시트 생성 시 필요)
+                <Code className="w-4 h-4 mr-1.5" /> Apps Script 코드
               </label>
               <button 
                 onClick={copyToClipboard}
@@ -175,7 +209,7 @@ const SheetConfigModal: React.FC<SheetConfigModalProps> = ({ isOpen, onClose, on
 
           <div className="space-y-3">
             <div className="flex justify-between items-center">
-              <label className="block text-sm font-bold text-slate-500 ml-1">웹 앱 URL</label>
+              <label className="block text-sm font-bold text-slate-500 ml-1">웹 앱 URL (Apps Script URL)</label>
               <button 
                 onClick={useDefaultUrl}
                 className="text-[11px] font-bold text-blue-600 hover:underline"

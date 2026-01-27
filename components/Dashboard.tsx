@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { PlusCircle, LogOut, Database, RefreshCw, Loader2, Calendar, Users, AlertTriangle, RotateCw, Lock, Menu, X } from 'lucide-react';
 import { Bid, BidCategory, BidResult, AppUser } from '../types';
 import StatsOverview from './StatsOverview';
@@ -36,23 +36,6 @@ const INITIAL_DATA: Bid[] = [
     result: BidResult.LOST,
     preferredBidder: '캡스텍',
     remarks: '당사 불참'
-  },
-  {
-    id: 'initial_bid_5',
-    targetYear: 2026,
-    category: BidCategory.EXISTING,
-    clientName: '현대엔지니어링',
-    manager: '영업부 박상일',
-    projectName: 'HEC 시화MTV 복합물류센터 FM 위탁관리',
-    method: '입찰',
-    schedule: '현설 10/16(목)\n제출 10/22(수)',
-    contractPeriod: '2027.1.1 ~ 12.31',
-    competitors: '당사, CHM, 백상, 앨림, 발렉스',
-    proposalAmount: 4200000000,
-    statusDetail: '2025.10.29(수) 결과 확인',
-    result: BidResult.WON,
-    preferredBidder: '당사',
-    remarks: '임대진행중'
   }
 ];
 
@@ -67,6 +50,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, currentUser, onUpdateUs
   
   const [editingBid, setEditingBid] = useState<Bid | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [isSheetConnected, setIsSheetConnected] = useState(false);
   const [connectionError, setConnectionError] = useState(false);
 
@@ -74,7 +58,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, currentUser, onUpdateUs
     return allBids.filter(bid => bid.targetYear === selectedYear);
   }, [allBids, selectedYear]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setConnectionError(false);
     if (hasSheetUrl()) {
       setIsLoading(true);
@@ -93,7 +77,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, currentUser, onUpdateUs
       setIsSheetConnected(false);
       setAllBids(INITIAL_DATA);
     }
-  };
+  }, [allBids.length]);
 
   useEffect(() => {
     loadData();
@@ -101,25 +85,37 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, currentUser, onUpdateUs
 
   const handleSaveBid = async (bid: Bid) => {
     const isEdit = !!editingBid;
-    
-    // 상태 업데이트 로직 개선: 이전 상태를 기반으로 정교하게 매칭
-    setAllBids(prev => {
-      if (isEdit) {
-        // 수정 모드: ID가 같은 항목 '하나'만 교체
-        return prev.map(item => item.id === bid.id ? { ...bid } : item);
-      } else {
-        // 신규 등록: 목록 맨 앞에 추가
-        return [{ ...bid }, ...prev];
-      }
-    });
+    setIsSaving(true);
 
-    if (isSheetConnected) {
-      const action = isEdit ? 'update' : 'create';
-      const success = await syncBidToSheet(action, bid);
-      if (!success) {
-        alert('서버 동기화에 실패했습니다. 데이터를 다시 불러옵니다.');
-        loadData();
+    try {
+      // 1. 서버 동기화 먼저 시도 (실시간성 확보)
+      if (isSheetConnected) {
+        const action = isEdit ? 'update' : 'create';
+        const success = await syncBidToSheet(action, bid);
+        
+        if (!success) {
+          throw new Error('서버 동기화에 실패했습니다.');
+        }
       }
+
+      // 2. 로컬 상태 업데이트
+      setAllBids(prev => {
+        if (isEdit) {
+          return prev.map(item => item.id === bid.id ? { ...bid } : item);
+        } else {
+          return [{ ...bid }, ...prev];
+        }
+      });
+
+      // 3. 성공 알림 및 모달 닫기
+      setIsModalOpen(false);
+      setEditingBid(null);
+    } catch (error: any) {
+      alert(error.message || '데이터 저장 중 오류가 발생했습니다. 네트워크 상태를 확인하세요.');
+      // 실패 시 데이터 재로드
+      loadData();
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -139,6 +135,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, currentUser, onUpdateUs
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
+      {isSaving && (
+        <div className="fixed inset-0 z-[100] bg-black/20 backdrop-blur-[2px] flex items-center justify-center">
+          <div className="bg-white p-6 rounded-3xl shadow-2xl flex items-center space-x-4">
+            <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+            <span className="font-bold text-slate-700">데이터를 저장하는 중입니다...</span>
+          </div>
+        </div>
+      )}
+
       <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
         <div className="max-w-[1920px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-3 sm:space-x-6 min-w-0">
